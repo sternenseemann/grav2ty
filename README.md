@@ -8,6 +8,8 @@ Physics computations are mainly powered by Edward Kmett's [linear][linear].
 Currently it only does gravity computations in a FRP-y way but it will
 definately evolve!
 
+[ki][naudiz] must also be mentioned for deriving the physical formulæ for me!
+
 ## Things left to do
 
 * collisions
