@@ -11,17 +11,29 @@ import Control.Lens
 fps :: Num a => a
 fps = 30
 
+-- | Representation of the objects in this simulation.
+--   An Object is either a static object or a dynamic
+--   object which gets influenced by the gravity force
+--   of other objects.
+--   Dynamic objects may but don't have to be controlled
+--   by an user. Also multiplayer scenarios are possible.
+--   By control I mean controlling the manual acceleration
+--   _acc.
 data Object
   = Static {
-    _loc  :: V2 Float
-  , _pic  :: Picture
-  , _mass :: Float
+    _loc  :: V2 Float -- ^ location of the object (V2 0 0) is in the centre
+                      --   of the simulation
+  , _pic  :: Picture  -- ^ the gloss picture to draw the object
+  , _mass :: Float    -- ^ mass in kilograms
   }
   | Dynamic {
-    _loc  :: V2 Float
-  , _pic  :: Picture
-  , _mass :: Float
-  , _acc  :: V2 Float
+    _loc  :: V2 Float -- ^ location of the object (V2 0 0) is in the centre
+                      --   of the simulation
+  , _pic  :: Picture  -- ^ the gloss picture to draw the object
+  , _mass :: Float    -- ^ mass in kilograms
+  , _acc  :: V2 Float -- ^ current manual acceleration of the object. Think of
+                      --    this as the acceleration caused by a spaceship's
+                      --    thrusters or similar.
   } deriving (Eq, Show)
 
 makeLenses ''Object
