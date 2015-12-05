@@ -28,6 +28,12 @@ makeLenses ''Object
 
 type Universe = [Object]
 
+data CompSt
+  = MkCompSt {
+    _lastUni :: Universe
+  , _currUni :: Universe
+  }
+
 takePicture :: Object -> Picture
 takePicture obj = let (V2 x y) = _loc obj
                       pic      = _pic obj
@@ -43,8 +49,14 @@ toTuple (V2 x y) = (x, y)
 fromTuple :: (a, a) -> V2 a
 fromTuple (x, y) = V2 x y
 
+scaleBoth :: Float -> Picture -> Picture
+scaleBoth f = scale f f
+
 timeStep :: Fractional a => a
 timeStep = 1 / fps
+
+unitChange :: Eq a => Behavior a -> Behavior (Event ())
+unitChange behavior = (() <$) <$> change behavior
 
 -- TODO: think about *best* approximation
 nextUniverse :: Universe -> Universe -> Universe
@@ -63,28 +75,30 @@ nextObject last@(Dynamic {}) curr@(Dynamic {}) forces
 gravityForce :: Object -> Object -> V2 Float
 gravityForce a b = (gravityConst * ((_mass a * _mass b) / (absDistance ** 2)))
   *^ (distance ^/ absDistance)
-  where gravityConst = 6.67408 * (10 ** (-11))
+  where gravityConst = 6.67408e-11
         distance = _loc b - _loc a
         absDistance = norm distance
 
 gravityForces :: Object -> Universe -> [V2 Float]
 gravityForces obj uni = map (gravityForce obj) $ dropFirst obj uni
 
-universeB :: Universe
-          -> Universe
+universeB :: CompSt
           -> Behavior Time
-          -> Behavior Float
+          -> Behavior (V2 Float)
           -> Behavior (Behavior Universe)
-universeB last curr time acc = do
-  e <- sample $ (() <$) <$> change time
-  e' <- snapshot (universeB curr (nextUniverse last curr) time acc) e
-  return $ pure curr `switch` e'
+universeB state time accB = do
+  let newState = MkCompSt {
+        _lastUni = _currUni state
+      , _currUni = nextUniverse (_lastUni state) (_currUni state)
+      }
+  e <- sample $ unitChange time
+  e' <- snapshot (universeB newState time accB) e
+  return $ pure (_currUni state) `switch` e'
 
 exampleUniverse :: Universe
 exampleUniverse =
-  [ Dynamic (V2 0 0) (color (makeColor 255 0 0 255) $ circleSolid 10) 10000 (V2 (-3) 0)
-  , Static (V2 0 (-300)) (color (makeColor 0 0 255 255) $ circleSolid 100) 200000000000
-  , Static (V2 0 300) (color (makeColor 0 0 255 255) $ circleSolid 100)    100000000000
+  [ Dynamic (V2 0 (earthRadius + 100000)) (color (makeColor 1 0 0 1) $ circleSolid (earthRadius / 100)) spaceshipMass (V2 0 0)
+  , Static (V2 0 0) (color (makeColor 0 0 1 1) $ circleSolid (earthRadius)) earthMass
   ]
 
 mainFRP :: Universe
@@ -92,8 +106,9 @@ mainFRP :: Universe
         -> EvStream GEvent
         -> Behavior (Behavior Picture)
 mainFRP uni time evs = do
-  uniB <- universeB uni uni time (pure 0)
-  return $ pictures . map takePicture <$> uniB
+  let initialState = MkCompSt uni uni
+  uniB <- universeB initialState time $ pure (V2 0 0)
+  return $ pictures . map (scaleBoth 0.00005 . takePicture) <$> uniB
 
 main :: IO ()
 main = runNowGlossPure (InWindow "grav1ty" (800,600) (10,10)) white fps
