@@ -112,6 +112,10 @@ exampleUniverse =
   [ Dynamic (V2 0 (earthRadius + 100000)) (color (makeColor 1 0 0 1) $ circleSolid (earthRadius / 100)) spaceshipMass (V2 0 0)
   , Static (V2 0 0) (color (makeColor 0 0 1 1) $ circleSolid (earthRadius)) earthMass
   ]
+  where earthMass = 5.974e24
+        earthRadius = 6378137
+        spaceshipMass = 1935
+
 
 mainFRP :: Universe
         -> Behavior Time
