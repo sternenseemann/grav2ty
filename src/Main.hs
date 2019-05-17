@@ -8,6 +8,7 @@ import Data.Maybe
 import qualified Data.Map as Map
 
 import Graphics.Gloss
+import Graphics.Gloss.Data.ViewPort
 import Graphics.Gloss.Interface.Pure.Game
 
 vectorToPoint :: V2 a -> (a, a)
@@ -27,14 +28,24 @@ renderObject obj = translate x y . rot . renderHitbox . objectHitbox $ obj
         toDegree  = (*) (360 / (2 * pi))
         clockwise = (*) (-1)
 
+renderObjectsCenter :: World Float -> ([Picture], Maybe (Float, Float))
+renderObjectsCenter w = accum w ([], Nothing)
+  where isLocal Dynamic { objectMod = LocalMod } = True
+        isLocal _ = False
+        accum [] acc = acc
+        accum (w:ws) (l, c) = accum ws
+          (renderObject w : l, if isLocal w then Just (vectorToPoint (objectLoc w)) else c)
+
 renderUi :: (Show a, Num a) => ControlState a -> Picture
 renderUi = translate (-350) (350) . scale 0.3 0.3 . Color green . Text . show
   . fromMaybe 0 . fmap snd . Map.lookup LocalMod . controlInputs
 
 renderWorld :: State Float -> Picture
-renderWorld (State ps world) = Pictures
-  . (:) (renderUi ps)
-  . map renderObject $ world
+renderWorld (State ps world) = Pictures [renderUi ps, centeredWorld]
+  where (objs, center) = renderObjectsCenter world
+        centeredWorld  = applyViewPortToPicture viewport $ Pictures objs
+        viewport       = ViewPort (invert . fromMaybe (0, 0) $ center) 0 1
+        invert (x, y)  = (-x, -y)
 
 eventHandler :: Floating a => Event -> State a -> State a
 eventHandler (EventKey key Down _ _) state = state
