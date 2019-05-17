@@ -128,11 +128,11 @@ shipHitbox = HMultiple
 
 initialWorld :: Fractional a => State a
 initialWorld = State (PlayerState 0 0)
-  [ Dynamic shipHitbox 0 10000 (V2 130 20) (V2 0 0) (V2 0 0) True
+  [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) True
   , Static (centeredCircle 80) 0 moonMass (V2 0 0)
 --  , Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 120)
   ]
-  where moonMass = 8e13
+  where moonMass = 8e14
 
 renderUi :: Show a => PlayerState a -> Picture
 renderUi ps = translate (-350) (350) . scale 0.3 0.3 . Color green . Text . show $ shipAcc ps
