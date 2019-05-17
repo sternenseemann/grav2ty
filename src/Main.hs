@@ -40,6 +40,7 @@ data Object a
   }
   | Static
   { objectHitbox :: Hitbox a
+  , objectRot    :: a
   , objectMass   :: a
   , objectLoc    :: V2 a
   } deriving (Show, Eq, Ord)
@@ -51,10 +52,6 @@ isStatic _         = False
 isDynamic :: Object a -> Bool
 isDynamic Dynamic {} = True
 isDynamic _          = False
-
-dropElem :: Eq a => a -> [a] -> [a]
-dropElem _ []     = []
-dropElem x (y:ys) = if x == y then ys else dropElem x ys
 
 gravitationForce :: Floating a => Object a -> Object a -> V2 a
 gravitationForce a b = (gravityConst *
@@ -78,7 +75,7 @@ updateObject :: Fractional a =>  a -> [V2 a] -> Object a -> Object a
 updateObject _ _ obj@Static {} = obj
 updateObject timeStep forces obj@Dynamic {} = obj
     { objectLoc   = objectLoc obj + (objectSpeed obj ^* timeStep)
-    , objectSpeed = traceShowId $ objectSpeed obj +
+    , objectSpeed = objectSpeed obj +
       (((sum forces ^/ objectMass obj) + objectAcc obj) ^* timeStep)
     }
 
@@ -96,9 +93,7 @@ vectorToPoint (V2 x y) = (x, y)
 renderObject :: Object Float -> Picture
 renderObject obj = translate x y . rot . renderHitbox . objectHitbox $ obj
   where (V2 x y)  = objectLoc obj
-        rot       = if isDynamic obj
-                       then rotate (clockwise . toDegree . objectRot $ obj)
-                       else id
+        rot       =  rotate (clockwise . toDegree . objectRot $ obj)
         toDegree  = (*) (360 / (2 * pi))
         clockwise = (*) (-1)
 
@@ -134,8 +129,8 @@ shipHitbox = HMultiple
 initialWorld :: Fractional a => State a
 initialWorld = State (PlayerState 0 0)
   [ Dynamic shipHitbox 0 10000 (V2 130 20) (V2 0 0) (V2 0 0) True
-  , Static (centeredCircle 80) moonMass (V2 0 0)
---  , Static (centeredCircle 40) (0.5 * moonMass) (V2 250 120)
+  , Static (centeredCircle 80) 0 moonMass (V2 0 0)
+--  , Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 120)
   ]
   where moonMass = 8e13
 
@@ -154,12 +149,14 @@ updateWorld timeStep (State ps world) = State ps $ map
       applyPlayerState ps $ obj)
   world
 
+eventHandler :: Floating a => Event -> State a -> State a
 eventHandler (EventKey key Down _ _) state = state
   { player = case key of
                SpecialKey KeyUp -> (player state) { shipAcc = shipAcc (player state) + 1 }
                SpecialKey KeyDown -> (player state) { shipAcc = shipAcc (player state) - 1 }
                SpecialKey KeyLeft -> (player state) { shipRot = shipRot (player state) + 0.1 }
                SpecialKey KeyRight -> (player state) { shipRot = shipRot (player state) - 0.1 }
+               _                   -> player state
   }
 eventHandler _ s = s
 
