@@ -10,6 +10,7 @@ the most realistic asteroids-like game in existence.
 * `down`: decrease thruster power (ship acceleration)
 * `left`: rotate ship counter-clockwise
 * `right`: rotate ship clockwise
+* `c`: toggle centered view
 
 ## roadmap
 

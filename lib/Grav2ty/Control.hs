@@ -6,10 +6,11 @@ import Linear.V2
 import Linear.Vector
 import qualified Data.Map as Map
 
-data State a
+data State a g
   = State
-  { control :: ControlState a
-  , world   :: World a
+  { control  :: ControlState a
+  , graphics :: g
+  , world    :: World a
   } deriving (Show, Eq)
 
 data ControlState a
