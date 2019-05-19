@@ -17,8 +17,10 @@ the most realistic asteroids-like game in existence.
 - [x] simulation of gravity
 - [x] controllable spaceship
 - [ ] collision detection
+- [ ] make measurements more realistic
+- [ ] allow for zooming the viewport
 - [ ] time scaling / fast forward
-- [ ] rework HUD
+- [ ] rework HUD, log additional info to console
 - [ ] cosmetics (improved models, stars, …)
 - [ ] projectiles & targets
 - [ ] multi player support (?)
