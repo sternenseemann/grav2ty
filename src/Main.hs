@@ -31,7 +31,7 @@ renderHitbox box =  Color white $
   case box of
     HCircle (V2 x' y') r -> translate x' y' $ Circle r
     HLine a b -> Line . map vectorToPoint $ [a, b]
-    HMultiple boxes -> Pictures $ map renderHitbox boxes
+    HCombined boxes -> Pictures $ map renderHitbox boxes
 
 renderObject :: Object Float -> Picture
 renderObject obj = translate x y . rot . renderHitbox . objectHitbox $ obj
