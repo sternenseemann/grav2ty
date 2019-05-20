@@ -1,4 +1,20 @@
-module Grav2ty.Simulation where
+module Grav2ty.Simulation
+  (
+  -- * Objects
+    Object (..)
+  , Modifier (..)
+  , World (..)
+  , updateObject
+  , gravitationForces
+  -- * Hitboxes
+  , Hitbox (..)
+  , shipHitbox
+  , centeredCircle
+  , translateHitbox
+  , rotateHitbox
+  , collision
+  , collisionWithWorld
+  ) where
 
 import Control.Lens
 import Data.Complex
@@ -47,7 +63,9 @@ rotateHitbox angle box =
   where rotator = cos angle :+ sin angle
         rotate = (^. complexV2) . (* rotator) . (^. from complexV2)
 
--- | Based on <https://de.wikipedia.org/wiki/Cramersche_Regel>
+-- | Implementation of
+--   [Cramer's rule](https://en.wikipedia.org/wiki/Cramer%27s_rule) for solving
+--   a system of two linear equations.
 cramer2 :: (Eq a, Fractional a) => M22 a -> V2 a -> Maybe (a, a)
 cramer2 coeff res = if detA == 0
                       then Nothing
