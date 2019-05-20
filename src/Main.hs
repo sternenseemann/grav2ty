@@ -100,6 +100,7 @@ updateWorld timeStep (State ctrl g world) = State ctrl
 initialWorld :: Fractional a => State a GlossState
 initialWorld = State (ControlState Map.empty) (GlossState (800, 800) (0, 0) True)
   [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod
+  , Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod
   , Static (centeredCircle 80) 0 moonMass (V2 0 0)
 --  , Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 120)
   ]
