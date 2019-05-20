@@ -64,11 +64,13 @@ eventHandler (EventKey key Down _ _) state = state
   , graphics = (graphics state) { glossCenterView = centerView }
   }
     where f = Just . f' . fromMaybe (0, 0)
+          accStep = 1
+          rotStep = pi / 10
           f' = case key of
-                SpecialKey KeyUp -> \(rot, acc) -> (rot, acc + 1)
-                SpecialKey KeyDown -> \(rot, acc) -> (rot, acc - 1)
-                SpecialKey KeyLeft -> \(rot, acc) -> (rot + 0.1, acc)
-                SpecialKey KeyRight -> \(rot, acc) -> (rot - 0.1, acc)
+                SpecialKey KeyUp -> \(rot, acc) -> (rot, acc + accStep)
+                SpecialKey KeyDown -> \(rot, acc) -> (rot, acc - accStep)
+                SpecialKey KeyLeft -> \(rot, acc) -> (rot + rotStep, acc)
+                SpecialKey KeyRight -> \(rot, acc) -> (rot - rotStep, acc)
                 _                   -> id
           centerView = (if key == (Char 'c') then not else id)
             . glossCenterView . graphics $ state
