@@ -3,6 +3,8 @@ module Grav2ty.Simulation
   -- * Objects
     Object (..)
   , Modifier (..)
+  , realHitbox
+  , isDynamic
   , World (..)
   , updateObject
   , gravitationForces
@@ -62,6 +64,12 @@ rotateHitbox angle box =
     HCombined l -> HCombined . map (rotateHitbox angle) $ l
   where rotator = cos angle :+ sin angle
         rotate = (^. complexV2) . (* rotator) . (^. from complexV2)
+
+-- | Returns the 'Hitbox' for an 'Object', but rotated and translated
+--   to the location it is *actually* at.
+realHitbox :: RealFloat a => Object a -> Hitbox a
+realHitbox obj = translateHitbox (objectLoc obj) . rotateHitbox (objectRot obj)
+  . objectHitbox $ obj
 
 -- | Implementation of
 --   [Cramer's rule](https://en.wikipedia.org/wiki/Cramer%27s_rule) for solving
@@ -130,9 +138,9 @@ collision (HLine a1 b1) (HLine a2 b2) =
 collision (HCombined as) b = any (collision b) as
 collision a b@(HCombined _) = collision b a
 
-collisionWithWorld :: (Ord a, Floating a) => World a -> Object a -> Bool
-collisionWithWorld world obj =
-  any (collision (objectHitbox obj) . objectHitbox) world
+collisionWithWorld :: (Ord a, RealFloat a) => World a -> Object a -> Bool
+collisionWithWorld world obj = any (\obj' ->
+  obj /= obj' && collision (realHitbox obj) (realHitbox obj')) world
 
 data Modifier
   = NoMod
@@ -161,6 +169,10 @@ data Object a
   , objectMass   :: a        -- ^ See above.
   , objectLoc    :: V2 a     -- ^ See above.
   } deriving (Show, Eq, Ord)
+
+isDynamic :: Object a -> Bool
+isDynamic Dynamic {} = True
+isDynamic _ = False
 
 type World a = [Object a]
 

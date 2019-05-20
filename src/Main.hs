@@ -6,7 +6,6 @@ import Grav2ty.Control
 import Linear.V2
 import Data.Maybe
 import Data.Tuple (uncurry)
-import Debug.Trace
 import qualified Data.Map as Map
 
 import Graphics.Gloss
@@ -34,11 +33,7 @@ renderHitbox box =  Color white $
     HCombined boxes -> Pictures $ map renderHitbox boxes
 
 renderObject :: Object Float -> Picture
-renderObject obj = renderHitbox . translate . rot . objectHitbox $ obj
-  where translate = translateHitbox (objectLoc obj)
-        rot       = rotateHitbox (objectRot obj)
-        toDegree  = (*) (360 / (2 * pi))
-        clockwise = (*) (-1)
+renderObject obj = renderHitbox . realHitbox $ obj
 
 renderUi :: (Show a, Num a) => State a GlossState -> Picture
 renderUi state = (uncurry translate) (tupleMap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
@@ -78,10 +73,16 @@ eventHandler (EventResize vp) state = state
   { graphics = (graphics state) { glossViewPort = vp } }
 eventHandler _ s = s
 
+-- TODO make code more generic and move to Grav2ty.Simulation
 updateWorld :: Float -> State Float GlossState -> State Float GlossState
 updateWorld timeStep (State ctrl g world) = State ctrl
-  (g { glossViewPortCenter = fromMaybe (0, 0) center }) newWorld
-  where (newWorld, center) = updateAndExtract world extractCenter ([], Nothing)
+  (g { glossViewPortCenter = fromMaybe (0, 0) center }) uncollidedWorld
+  where uncollidedWorld = foldl collideFolder [] newWorld
+        collideFolder res obj =
+          if isDynamic obj && collisionWithWorld newWorld obj
+             then res
+             else obj : res
+        (newWorld, center) = updateAndExtract world extractCenter ([], Nothing)
         extractCenter :: Object Float -> Maybe (Float, Float)
                       -> Maybe (Float, Float)
         extractCenter o@(Dynamic { objectMod = LocalMod }) _ =
