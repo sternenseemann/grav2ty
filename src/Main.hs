@@ -34,19 +34,11 @@ renderHitbox box =  Color white $
     HCombined boxes -> Pictures $ map renderHitbox boxes
 
 renderObject :: Object Float -> Picture
-renderObject obj = translate x y . rot . renderHitbox . objectHitbox $ obj
-  where (V2 x y)  = objectLoc obj
-        rot       =  rotate (clockwise . toDegree . objectRot $ obj)
+renderObject obj = renderHitbox . translate . rot . objectHitbox $ obj
+  where translate = translateHitbox (objectLoc obj)
+        rot       = rotateHitbox (objectRot obj)
         toDegree  = (*) (360 / (2 * pi))
         clockwise = (*) (-1)
-
-renderObjectsCenter :: World Float -> ([Picture], Maybe (Float, Float))
-renderObjectsCenter w = accum w ([], Nothing)
-  where isLocal Dynamic { objectMod = LocalMod } = True
-        isLocal _ = False
-        accum [] acc = acc
-        accum (w:ws) (l, c) = accum ws
-          (renderObject w : l, if isLocal w then Just (vectorToPoint (objectLoc w)) else c)
 
 renderUi :: (Show a, Num a) => State a GlossState -> Picture
 renderUi state = (uncurry translate) (tupleMap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)

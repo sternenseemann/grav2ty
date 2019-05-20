@@ -1,6 +1,7 @@
 module Grav2ty.Simulation where
 
 import Control.Lens
+import Data.Complex
 import Linear.Matrix
 import Linear.Metric (norm, distance)
 import Linear.V2
@@ -26,6 +27,25 @@ shipHitbox = HCombined
 
 centeredCircle :: Num a => a -> Hitbox a
 centeredCircle r = HCircle (V2 0 0) r
+
+translateHitbox :: Num a => V2 a -> Hitbox a -> Hitbox a
+translateHitbox t (HLine a b) = HLine (a + t) (b + t)
+translateHitbox t (HCircle c r) = HCircle (c + t) r
+translateHitbox t (HCombined hs) = HCombined . map (translateHitbox t) $ hs
+
+complexV2 :: Iso' (Complex a) (V2 a)
+complexV2 = iso (\(x :+ y) -> V2 x y) (\(V2 x y) -> x :+ y)
+
+-- TODO address inaccuracies of 'Float' and 'Double'?
+-- | Rotate a 'Hitbox' by a radial angle.
+rotateHitbox :: RealFloat a => a -> Hitbox a -> Hitbox a
+rotateHitbox angle box =
+  case box of
+    HLine a b -> HLine (rotate a) (rotate b)
+    HCircle c r -> HCircle (rotate c) r
+    HCombined l -> HCombined . map (rotateHitbox angle) $ l
+  where rotator = cos angle :+ sin angle
+        rotate = (^. complexV2) . (* rotator) . (^. from complexV2)
 
 -- | Based on <https://de.wikipedia.org/wiki/Cramersche_Regel>
 cramer2 :: (Eq a, Fractional a) => M22 a -> V2 a -> Maybe (a, a)
