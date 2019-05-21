@@ -46,7 +46,7 @@ renderUi :: (Show a, Num a) => State a GlossState -> Picture
 renderUi state = (uncurry translate) (tupleMap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
     . view (graphics . glossViewPort) $ state)
   . scale 0.3 0.3 . Color green . Text . show
-  . fromMaybe 0 . fmap snd . Map.lookup LocalMod . view (control . ctrlInputs) $ state
+  . fromMaybe 0 $ state^?control.ctrlInputs.at LocalMod ._Just.modAcc
 
 renderStars :: (Float, Float) -> Picture
 renderStars center = undefined
@@ -65,16 +65,17 @@ renderGame state = Pictures [ renderUi  state
 
 eventHandler :: (Show a, Floating a) => Event -> State a GlossState -> State a GlossState
 eventHandler (EventKey key Down _ _) state = action state
-  where updateLocalMod :: Lens' (a, a) a -> (a -> a) -> State a GlossState -> State a GlossState
+  where updateLocalMod :: Lens' (Modification a) a -> (a -> a)
+                       -> State a GlossState -> State a GlossState
         updateLocalMod l f = over (control.ctrlInputs.at LocalMod ._Just.l) f
         accStep = 1
         rotStep = pi / 10
         scaleStep = 0.05
         action = case key of
-                   SpecialKey KeyUp -> updateLocalMod _2 (+ accStep)
-                   SpecialKey KeyDown -> updateLocalMod _2 (subtract accStep)
-                   SpecialKey KeyLeft -> updateLocalMod _1 (+ rotStep)
-                   SpecialKey KeyRight -> updateLocalMod _1 (subtract rotStep)
+                   SpecialKey KeyUp -> updateLocalMod modAcc (+ accStep)
+                   SpecialKey KeyDown -> updateLocalMod modAcc (subtract accStep)
+                   SpecialKey KeyLeft -> updateLocalMod modRot (+ rotStep)
+                   SpecialKey KeyRight -> updateLocalMod modRot (subtract rotStep)
                    Char 'c' -> over (graphics.glossCenterView) not
                    Char '+' -> over (graphics.glossViewPortScale) (+ scaleStep)
                    Char '-' -> over (graphics.glossViewPortScale) (subtract scaleStep)
@@ -108,7 +109,7 @@ updateWorld timeStep (State ctrl g world) = State ctrl
 
 initialWorld :: Fractional a => State a GlossState
 initialWorld = State
-  (ControlState (Map.fromList [(LocalMod, (0,0))]) 1)
+  (ControlState (Map.fromList [(LocalMod, zeroModification)]) 1)
   (GlossState (800, 800) (0, 0) 1 True)
   [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod
   , Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod
