@@ -1,34 +1,49 @@
-module Grav2ty.Control where
+{-# LANGUAGE TemplateHaskell #-}
+module Grav2ty.Control
+  ( State (..)
+  , control, graphics, world
+  , ControlState (..)
+  , ctrlInputs, ctrlTimeScale
+  , applyControls
+  ) where
 
 import Grav2ty.Simulation
 
+import Control.Lens
 import Linear.V2
 import Linear.Vector
 import qualified Data.Map as Map
 
-data State a g
-  = State
-  { control  :: ControlState a
-  , graphics :: g
-  , world    :: World a
-  } deriving (Show, Eq)
-
 data ControlState a
   = ControlState
-  { controlInputs :: Map.Map Modifier (a, a) -- ^ Map containing the Modifier
+  { _ctrlInputs :: Map.Map Modifier (a, a) -- ^ Map containing the Modifier
                                              --   and the modified values,
                                              --   mainly the Radial angle the
                                              --   object is rotated at and
                                              --   the current acceleration
                                              --   of the ship.
+  , _ctrlTimeScale :: a                    -- ^ Scaling of time allowing
+                                             --   for the simulation to be
+                                             --   sped up or slowed down
   } deriving (Show, Eq)
+
+makeLenses ''ControlState
+
+data State a g
+  = State
+  { _control  :: ControlState a
+  , _graphics :: g
+  , _world    :: World a
+  } deriving (Show, Eq)
+
+makeLenses ''State
 
 applyControls :: Floating a => ControlState a -> Object a -> Object a
 applyControls _ obj@Static {} = obj
 applyControls cs obj@Dynamic {} =
   case objectMod obj of
     NoMod -> obj
-    LocalMod -> case Map.lookup LocalMod (controlInputs cs) of
+    LocalMod -> case Map.lookup LocalMod (cs ^. ctrlInputs) of
                Nothing -> obj
                Just (rot, acc) -> obj
                  { objectRot = rot

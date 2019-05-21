@@ -1,12 +1,16 @@
+{-# LANGUAGE TemplateHaskell  #-}
+{-# LANGUAGE Rank2Types       #-}
 module Main where
 
 import Grav2ty.Simulation
 import Grav2ty.Control
 
+import Control.Lens
 import Linear.V2
 import Data.Maybe
 import Data.Tuple (uncurry)
 import qualified Data.Map as Map
+import Data.Map.Lens
 
 import Graphics.Gloss
 import Graphics.Gloss.Data.ViewPort
@@ -14,10 +18,13 @@ import Graphics.Gloss.Interface.Pure.Game
 
 data GlossState
   = GlossState
-  { glossViewPort :: (Int, Int)
-  , glossViewPortCenter :: (Float, Float)
-  , glossCenterView :: Bool
+  { _glossViewPort :: (Int, Int)
+  , _glossViewPortCenter :: (Float, Float)
+  , _glossViewPortScale :: Float
+  , _glossCenterView :: Bool
   } deriving (Show, Eq, Ord)
+
+makeLenses ''GlossState
 
 vectorToPoint :: V2 a -> (a, a)
 vectorToPoint (V2 x y) = (x, y)
@@ -37,9 +44,9 @@ renderObject obj = renderHitbox . realHitbox $ obj
 
 renderUi :: (Show a, Num a) => State a GlossState -> Picture
 renderUi state = (uncurry translate) (tupleMap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
-    . glossViewPort . graphics $ state)
+    . view (graphics . glossViewPort) $ state)
   . scale 0.3 0.3 . Color green . Text . show
-  . fromMaybe 0 . fmap snd . Map.lookup LocalMod . controlInputs . control $ state
+  . fromMaybe 0 . fmap snd . Map.lookup LocalMod . view (control . ctrlInputs) $ state
 
 renderStars :: (Float, Float) -> Picture
 renderStars center = undefined
@@ -47,36 +54,38 @@ renderStars center = undefined
 renderGame :: State Float GlossState -> Picture
 renderGame state = Pictures [ renderUi  state
                             , if centeredView then centeredWorld else objs ]
-  where objs = Pictures . map renderObject . world $ state
+  where objs = Pictures . map renderObject $ state^.world
         centeredWorld = applyViewPortToPicture viewport objs
-        centeredView = glossCenterView . graphics $ state
-        viewport = ViewPort (invert . glossViewPortCenter . graphics $ state) 0 1
+        centeredView = state^.graphics . glossCenterView
+        viewport = ViewPort
+          (invert $ state^.graphics.glossViewPortCenter)
+          0
+          (state^.graphics.glossViewPortScale)
         invert (x, y) = (-x, -y)
 
-eventHandler :: Floating a => Event -> State a GlossState -> State a GlossState
-eventHandler (EventKey key Down _ _) state = state
-  { control = ControlState . Map.alter f LocalMod . controlInputs . control $ state
-  , graphics = (graphics state) { glossCenterView = centerView }
-  }
-    where f = Just . f' . fromMaybe (0, 0)
-          accStep = 1
-          rotStep = pi / 10
-          f' = case key of
-                SpecialKey KeyUp -> \(rot, acc) -> (rot, acc + accStep)
-                SpecialKey KeyDown -> \(rot, acc) -> (rot, acc - accStep)
-                SpecialKey KeyLeft -> \(rot, acc) -> (rot + rotStep, acc)
-                SpecialKey KeyRight -> \(rot, acc) -> (rot - rotStep, acc)
-                _                   -> id
-          centerView = (if key == (Char 'c') then not else id)
-            . glossCenterView . graphics $ state
-eventHandler (EventResize vp) state = state
-  { graphics = (graphics state) { glossViewPort = vp } }
+eventHandler :: (Show a, Floating a) => Event -> State a GlossState -> State a GlossState
+eventHandler (EventKey key Down _ _) state = action state
+  where updateLocalMod :: Lens' (a, a) a -> (a -> a) -> State a GlossState -> State a GlossState
+        updateLocalMod l f = over (control.ctrlInputs.at LocalMod ._Just.l) f
+        accStep = 1
+        rotStep = pi / 10
+        scaleStep = 0.05
+        action = case key of
+                   SpecialKey KeyUp -> updateLocalMod _2 (+ accStep)
+                   SpecialKey KeyDown -> updateLocalMod _2 (subtract accStep)
+                   SpecialKey KeyLeft -> updateLocalMod _1 (+ rotStep)
+                   SpecialKey KeyRight -> updateLocalMod _1 (subtract rotStep)
+                   Char 'c' -> over (graphics.glossCenterView) not
+                   Char '+' -> over (graphics.glossViewPortScale) (+ scaleStep)
+                   Char '-' -> over (graphics.glossViewPortScale) (subtract scaleStep)
+                   _ -> id
+eventHandler (EventResize vp) state = set (graphics.glossViewPort) vp state
 eventHandler _ s = s
 
 -- TODO make code more generic and move to Grav2ty.Simulation
 updateWorld :: Float -> State Float GlossState -> State Float GlossState
 updateWorld timeStep (State ctrl g world) = State ctrl
-  (g { glossViewPortCenter = fromMaybe (0, 0) center }) uncollidedWorld
+  (set glossViewPortCenter (fromMaybe (0, 0) center) g) uncollidedWorld
   where uncollidedWorld = foldl collideFolder [] newWorld
         collideFolder res obj =
           if isDynamic obj && collisionWithWorld newWorld obj
@@ -98,7 +107,9 @@ updateWorld timeStep (State ctrl g world) = State ctrl
           . applyControls ctrl $ obj
 
 initialWorld :: Fractional a => State a GlossState
-initialWorld = State (ControlState Map.empty) (GlossState (800, 800) (0, 0) True)
+initialWorld = State
+  (ControlState (Map.fromList [(LocalMod, (0,0))]) 1)
+  (GlossState (800, 800) (0, 0) 1 True)
   [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod
   , Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod
   , Static (centeredCircle 80) 0 moonMass (V2 0 0)
@@ -108,7 +119,7 @@ initialWorld = State (ControlState Map.empty) (GlossState (800, 800) (0, 0) True
 
 main :: IO ()
 main = play
-  (InWindow "grav2ty" (glossViewPort . graphics $ initialWorld) (0,0))
+  (InWindow "grav2ty" (initialWorld^.graphics.glossViewPort) (0,0))
   black
   300
   initialWorld

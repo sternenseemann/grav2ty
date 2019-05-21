@@ -6,11 +6,10 @@ the most realistic asteroids-like game in existence.
 
 ## controls
 
-* `up`: increase thruster power (ship acceleration)
-* `down`: decrease thruster power (ship acceleration)
-* `left`: rotate ship counter-clockwise
-* `right`: rotate ship clockwise
+* `up`/`down`: increase/decrease thruster power (ship acceleration)
+* `left`/`right`: rotate ship (counter)-clockwise
 * `c`: toggle centered view
+* `+`/`-`: zoom in/out
 
 ## roadmap
 
@@ -18,7 +17,7 @@ the most realistic asteroids-like game in existence.
 - [x] controllable spaceship
 - [x] collision detection
 - [ ] make measurements more realistic
-- [ ] allow for zooming the viewport
+- [x] allow for zooming the viewport
 - [ ] time scaling / fast forward
 - [ ] rework HUD, log additional info to console
 - [ ] cosmetics (improved models, stars, …)
