@@ -29,8 +29,8 @@ makeLenses ''GlossState
 vectorToPoint :: V2 a -> (a, a)
 vectorToPoint (V2 x y) = (x, y)
 
-tupleMap :: (a -> b) -> (a, a) -> (b, b)
-tupleMap f (a, b) = (f a, f b)
+homBimap :: Bifunctor f => (a -> b) -> f a a -> f b b
+homBimap f = bimap f f
 
 renderHitbox :: Hitbox Float -> Picture
 renderHitbox box =  Color white $
@@ -43,7 +43,7 @@ renderObject :: Object Float -> Picture
 renderObject obj = renderHitbox . realHitbox $ obj
 
 renderUi :: (Show a, Num a) => State a GlossState -> Picture
-renderUi state = (uncurry translate) (tupleMap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
+renderUi state = (uncurry translate) (homBimap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
     . view (graphics . glossViewPort) $ state)
   . scale 0.3 0.3 . Color green . Text . show
   . fromMaybe 0 $ state^?control.ctrlInputs.at LocalMod ._Just.modAcc
@@ -52,16 +52,15 @@ renderStars :: (Float, Float) -> Picture
 renderStars center = undefined
 
 renderGame :: State Float GlossState -> Picture
-renderGame state = Pictures [ renderUi  state
-                            , if centeredView then centeredWorld else objs ]
+renderGame state = Pictures [ renderUi  state, applyViewPort objs ]
   where objs = Pictures . map renderObject $ state^.world
-        centeredWorld = applyViewPortToPicture viewport objs
-        centeredView = state^.graphics . glossCenterView
+        applyViewPort = if state^.graphics . glossCenterView
+                           then applyViewPortToPicture viewport
+                           else id
         viewport = ViewPort
-          (invert $ state^.graphics.glossViewPortCenter)
+          (homBimap negate $ state^.graphics.glossViewPortCenter)
           0
           (state^.graphics.glossViewPortScale)
-        invert (x, y) = (-x, -y)
 
 eventHandler :: (Show a, Floating a) => Event -> State a GlossState -> State a GlossState
 eventHandler (EventKey key Down _ _) state = action state
