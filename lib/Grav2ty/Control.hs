@@ -71,8 +71,10 @@ updateState t extract state = set world newWorld . updateState $ state
   where oldWorld = state^.world
         (newWorld, updateState) = tailCall oldWorld ([], id)
         tailCall [] acc = acc
-        tailCall (x:xs) (nw, f) = tailCall xs
-          (if coll x then nw else updateObject' x : nw, extract x . f)
+        tailCall (x:xs) (nw, f) = tailCall xs $
+          if coll x
+             then (nw, f)
+             else (updateObject' x : nw, extract x . f)
         coll obj = isDynamic obj && collisionWithWorld oldWorld obj
         scaledT = state^.control^.ctrlTimeScale * t
         updateObject' obj = updateObject scaledT (gravitationForces oldWorld obj)
