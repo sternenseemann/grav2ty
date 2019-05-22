@@ -8,6 +8,8 @@ module Grav2ty.Control
   , Modification (..)
   , zeroModification
   , modAcc, modRot
+  , ExtractFunction (..)
+  , updateState
   ) where
 
 import Grav2ty.Simulation
@@ -61,3 +63,14 @@ applyControls cs obj@Dynamic {} =
                  , objectAcc = angle rot ^* acc
                  }
 
+type ExtractFunction a b = Object a -> (State a b -> State a b)
+
+updateState :: (Floating a, Ord a) => a -> ExtractFunction a b
+                -> State a b -> State a b
+updateState t extract state = set world newWorld . updateState $ state
+  where oldWorld = state^.world
+        (newWorld, updateState) = tailCall oldWorld ([], id)
+        tailCall [] acc = acc
+        tailCall (x:xs) (nw, f) = tailCall xs (updateObject' x : nw, extract x . f)
+        updateObject' obj = updateObject t (gravitationForces oldWorld obj)
+          . applyControls (state^.control) $ obj

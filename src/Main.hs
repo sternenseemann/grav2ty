@@ -70,41 +70,25 @@ eventHandler (EventKey key Down _ _) state = action state
         accStep = 1
         rotStep = pi / 10
         scaleStep = 0.05
-        action = case key of
-                   SpecialKey KeyUp -> updateLocalMod modAcc (+ accStep)
-                   SpecialKey KeyDown -> updateLocalMod modAcc (subtract accStep)
-                   SpecialKey KeyLeft -> updateLocalMod modRot (+ rotStep)
-                   SpecialKey KeyRight -> updateLocalMod modRot (subtract rotStep)
-                   Char 'c' -> over (graphics.glossCenterView) not
-                   Char '+' -> over (graphics.glossViewPortScale) (+ scaleStep)
-                   Char '-' -> over (graphics.glossViewPortScale) (subtract scaleStep)
-                   _ -> id
+        action =
+          case key of
+            SpecialKey KeyUp -> updateLocalMod modAcc (+ accStep)
+            SpecialKey KeyDown -> updateLocalMod modAcc (subtract accStep)
+            SpecialKey KeyLeft -> updateLocalMod modRot (+ rotStep)
+            SpecialKey KeyRight -> updateLocalMod modRot (subtract rotStep)
+            Char 'c' -> over (graphics.glossCenterView) not
+            Char '+' -> over (graphics.glossViewPortScale) (+ scaleStep)
+            Char '-' -> over (graphics.glossViewPortScale) (subtract scaleStep)
+            _ -> id
 eventHandler (EventResize vp) state = set (graphics.glossViewPort) vp state
 eventHandler _ s = s
 
--- TODO make code more generic and move to Grav2ty.Simulation
 updateWorld :: Float -> State Float GlossState -> State Float GlossState
-updateWorld timeStep (State ctrl g world) = State ctrl
-  (set glossViewPortCenter (fromMaybe (0, 0) center) g) uncollidedWorld
-  where uncollidedWorld = foldl collideFolder [] newWorld
-        collideFolder res obj =
-          if isDynamic obj && collisionWithWorld newWorld obj
-             then res
-             else obj : res
-        (newWorld, center) = updateAndExtract world extractCenter ([], Nothing)
-        extractCenter :: Object Float -> Maybe (Float, Float)
-                      -> Maybe (Float, Float)
-        extractCenter o@(Dynamic { objectMod = LocalMod }) _ =
-          Just . vectorToPoint . objectLoc $ o
-        extractCenter _ c = c
-        updateAndExtract :: World Float -> (Object Float -> i -> i)
-                         -> (World Float, i) -> (World Float, i)
-        updateAndExtract [] f acc = acc
-        updateAndExtract (x:xs) f (xs', i) = updateAndExtract xs f
-          (updateObject' x : xs', f x i)
-        updateObject' :: Object Float -> Object Float
-        updateObject' obj = updateObject timeStep (gravitationForces world obj)
-          . applyControls ctrl $ obj
+updateWorld ts state = updateState ts extract state
+  where extract obj@Dynamic { objectMod = LocalMod } = set
+          (graphics.glossViewPortCenter)
+          (vectorToPoint . objectLoc $ obj)
+        extract _ = id
 
 initialWorld :: Fractional a => State a GlossState
 initialWorld = State
