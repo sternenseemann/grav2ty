@@ -10,6 +10,7 @@ the most realistic asteroids-like game in existence.
 * `left`/`right`: rotate ship (counter)-clockwise
 * `c`: toggle centered view
 * `+`/`-`: zoom in/out
+* `,`/`.`: slow time down / speed it up
 
 ## roadmap
 
@@ -18,7 +19,7 @@ the most realistic asteroids-like game in existence.
 - [x] collision detection
 - [ ] make measurements more realistic
 - [x] allow for zooming the viewport
-- [ ] time scaling / fast forward
+- [x] time scaling / fast forward
 - [ ] rework HUD, log additional info to console
 - [ ] cosmetics (improved models, stars, …)
 - [ ] projectiles & targets

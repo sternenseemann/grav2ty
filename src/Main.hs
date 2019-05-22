@@ -7,10 +7,12 @@ import Grav2ty.Control
 
 import Control.Lens
 import Linear.V2
+import Data.Fixed (mod')
 import Data.Maybe
 import Data.Tuple (uncurry)
 import qualified Data.Map as Map
 import Data.Map.Lens
+import Text.Printf
 
 import Graphics.Gloss
 import Graphics.Gloss.Data.ViewPort
@@ -42,11 +44,13 @@ renderHitbox box =  Color white $
 renderObject :: Object Float -> Picture
 renderObject obj = renderHitbox . realHitbox $ obj
 
-renderUi :: (Show a, Num a) => State a GlossState -> Picture
+renderUi :: (PrintfArg a, Num a) => State a GlossState -> Picture
 renderUi state = (uncurry translate) (homBimap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
-    . view (graphics . glossViewPort) $ state)
-  . scale 0.3 0.3 . Color green . Text . show
-  . fromMaybe 0 $ state^?control.ctrlInputs.at LocalMod ._Just.modAcc
+  . view (graphics . glossViewPort) $ state)
+  . scale 0.2 0.2 . Color green . Text $ uiText
+  where uiText = printf "Acceleration: %.0f TimeScale: %.1f" acc timeScale
+        acc = fromMaybe 0 $ state^?control.ctrlInputs.at LocalMod ._Just.modAcc
+        timeScale = state^.control.ctrlTimeScale
 
 renderStars :: (Float, Float) -> Picture
 renderStars center = undefined
@@ -62,7 +66,16 @@ renderGame state = Pictures [ renderUi  state, applyViewPort objs ]
           0
           (state^.graphics.glossViewPortScale)
 
-eventHandler :: (Show a, Floating a) => Event -> State a GlossState -> State a GlossState
+boundSub :: (Ord a, Num a) => a -> a -> a -> a
+boundSub min a x = if res < min then min else res
+  where res = x - a
+
+boundAdd :: (Ord a, Num a) => a -> a -> a -> a
+boundAdd max a x = if res > max then max else res
+  where res = x + a
+
+eventHandler :: (Show a, Ord a, Real a, Floating a) => Event
+             -> State a GlossState -> State a GlossState
 eventHandler (EventKey key Down _ _) state = action state
   where updateLocalMod :: Lens' (Modification a) a -> (a -> a)
                        -> State a GlossState -> State a GlossState
@@ -70,15 +83,19 @@ eventHandler (EventKey key Down _ _) state = action state
         accStep = 1
         rotStep = pi / 10
         scaleStep = 0.05
+        timeStep = 0.2
+        mod2pi = flip mod' (2 * pi)
         action =
           case key of
             SpecialKey KeyUp -> updateLocalMod modAcc (+ accStep)
-            SpecialKey KeyDown -> updateLocalMod modAcc (subtract accStep)
-            SpecialKey KeyLeft -> updateLocalMod modRot (+ rotStep)
-            SpecialKey KeyRight -> updateLocalMod modRot (subtract rotStep)
+            SpecialKey KeyDown -> updateLocalMod modAcc (boundSub 0 accStep)
+            SpecialKey KeyLeft -> updateLocalMod modRot (mod2pi . (+ rotStep))
+            SpecialKey KeyRight -> updateLocalMod modRot (mod2pi . (subtract rotStep))
             Char 'c' -> over (graphics.glossCenterView) not
             Char '+' -> over (graphics.glossViewPortScale) (+ scaleStep)
             Char '-' -> over (graphics.glossViewPortScale) (subtract scaleStep)
+            Char '.' -> over (control.ctrlTimeScale) (+ timeStep)
+            Char ',' -> over (control.ctrlTimeScale) (boundSub 0 timeStep)
             _ -> id
 eventHandler (EventResize vp) state = set (graphics.glossViewPort) vp state
 eventHandler _ s = s
@@ -97,7 +114,7 @@ initialWorld = State
   [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod
   , Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod
   , Static (centeredCircle 80) 0 moonMass (V2 0 0)
---  , Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 120)
+--  , Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 250)
   ]
   where moonMass = 8e14
 

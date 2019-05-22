@@ -65,12 +65,15 @@ applyControls cs obj@Dynamic {} =
 
 type ExtractFunction a b = Object a -> (State a b -> State a b)
 
-updateState :: (Floating a, Ord a) => a -> ExtractFunction a b
+updateState :: (RealFloat a, Ord a) => a -> ExtractFunction a b
                 -> State a b -> State a b
 updateState t extract state = set world newWorld . updateState $ state
   where oldWorld = state^.world
         (newWorld, updateState) = tailCall oldWorld ([], id)
         tailCall [] acc = acc
-        tailCall (x:xs) (nw, f) = tailCall xs (updateObject' x : nw, extract x . f)
-        updateObject' obj = updateObject t (gravitationForces oldWorld obj)
+        tailCall (x:xs) (nw, f) = tailCall xs
+          (if coll x then nw else updateObject' x : nw, extract x . f)
+        coll obj = isDynamic obj && collisionWithWorld oldWorld obj
+        scaledT = state^.control^.ctrlTimeScale * t
+        updateObject' obj = updateObject scaledT (gravitationForces oldWorld obj)
           . applyControls (state^.control) $ obj

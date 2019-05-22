@@ -143,9 +143,10 @@ collisionWithWorld world obj = any (\obj' ->
   obj /= obj' && collision (realHitbox obj) (realHitbox obj')) world
 
 data Modifier
-  = NoMod
-  | LocalMod
-  deriving (Eq, Ord, Show)
+  = NoMod            -- ^ Not modified, purely physics based.
+  | LocalMod         -- ^ Object is modified by local client / player.
+  | External Integer -- ^ Object is modified by an external source / other players.
+  deriving(Eq, Ord, Show)
 
 data Object a
   = Dynamic
