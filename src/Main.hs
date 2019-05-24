@@ -113,8 +113,8 @@ initialWorld :: Fractional a => State a GlossState
 initialWorld = State
   (ControlState (Map.fromList [(LocalMod, zeroModification)]) 1 0)
   (GlossState (800, 800) (0, 0) 1 True)
-  [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod (Just (V2 15 0, V2 1 0))
-  , Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod Nothing
+  [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod (Just (V2 15 0, V2 1 0)) Nothing
+  , Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod Nothing Nothing
   , Static (centeredCircle 80) 0 moonMass (V2 0 0)
 --  , Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 250)
   ]

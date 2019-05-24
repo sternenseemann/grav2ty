@@ -25,7 +25,8 @@ the most realistic asteroids-like game in existence.
 - [x] rework HUD, log additional info to console
   - [ ] Add speed to HUD
 - [x] projectiles
-  - [ ] Limit firerate, make projectiles self-destruct
+  - [ ] Limit firerate
+  - [x] make projectiles self-destruct
 - [ ] multi player support
 - [ ] cosmetics (improved models, stars, …)
 - [ ] switch rendering engine

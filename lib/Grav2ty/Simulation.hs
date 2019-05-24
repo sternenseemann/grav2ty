@@ -161,21 +161,22 @@ type Cannon a = Maybe (V2 a, V2 a)
 
 data Object a
   = Dynamic
-  { objectHitbox :: Hitbox a  -- ^  hitbox of the object. Hitbox points at
-                              --    (V2 0 0) will always be at the center of the
-                              --    object
-  , objectRot    :: a         -- ^ Radial angle
-  , objectMass   :: a         -- ^ mass of the object in kg
-  , objectLoc    :: V2 a      -- ^ Current location of the object.
-  , objectSpeed  :: V2 a      -- ^ Current speed of the Object. Used for
-                              --   simulation approximation
-  , objectAcc    :: V2 a      -- ^ Current static Acceleration of the object.
-                              --   0 unless controlled by the player or
-                              --   projectile.
-  , objectMod    :: Modifier  -- ^ If and how the Object can be modified during
-                              --   the simulation.
-  , objectCannon :: Cannon a  -- ^ Point and Direction projectiles can or can not
-                              --   be fired from.
+  { objectHitbox :: Hitbox a      -- ^ hitbox of the object. Hitbox points at
+                                  --   (V2 0 0) will always be at the center of
+                                  --   the object
+  , objectRot    :: a             -- ^ Radial angle
+  , objectMass   :: a             -- ^ mass of the object in kg
+  , objectLoc    :: V2 a          -- ^ Current location of the object.
+  , objectSpeed  :: V2 a          -- ^ Current speed of the Object. Used for
+                                  --   simulation approximation
+  , objectAcc    :: V2 a          -- ^ Current static Acceleration of the object.
+                                  --   0 unless controlled by the player or
+                                  --   projectile.
+  , objectMod    :: Modifier      -- ^ If and how the Object can be modified
+                                  --   during the simulation.
+  , objectCannon :: Cannon a      -- ^ Point and Direction projectiles can or
+                                  --   can not be fired from.
+  , objectLife   :: Maybe Integer -- ^ Tick the Object will be destroyed at.
   }
   | Static
   { objectHitbox :: Hitbox a -- ^ See above.

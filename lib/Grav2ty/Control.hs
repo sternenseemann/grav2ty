@@ -56,31 +56,37 @@ data State a g
 
 makeLenses ''State
 
-projectile :: RealFloat a => (V2 a, V2 a) -> Object a -> Object a
-projectile (pos,speed) ship =
-  Dynamic (centeredCircle 1) 0 1000 pPos pSpeed 0 NoMod Nothing
+projectile :: RealFloat a => (V2 a, V2 a) -> Integer -> Object a -> Object a
+projectile (pos,speed) tick ship =
+  Dynamic (centeredCircle 1) 0 1000 pPos pSpeed 0 NoMod Nothing . Just $ tick + 5000
   where pPos = objectLoc ship + rotateV2 (objectRot ship) pos
         pSpeed = (15 * rotateV2 (objectRot ship) speed) + objectSpeed ship
 
 applyControls :: RealFloat a => ControlState a -> Object a -> [Object a]
 applyControls _ obj@Static {} = [obj]
 applyControls cs obj@Dynamic {} =
-  case objectMod obj of
-    NoMod -> [obj]
-    LocalMod -> case Map.lookup (objectMod obj) (cs^.ctrlInputs) of
-               Nothing -> [obj]
-               Just (Modification rot acc fire) ->
-                 let newObj = obj
-                      { objectRot = rot
-                      , objectAcc = angle rot ^* acc
-                      }
-                     -- Note: we are relying on laziness here: if objectCannon
-                     -- is Nothing the pObj never gets evaluated.
-                     pObj = projectile (fromJust . objectCannon $ obj) newObj
-                     pList = if cs^.ctrlTick /= fire || isNothing (objectCannon obj)
-                                then []
-                                else [pObj]
-                  in newObj : pList
+  if isNothing life || fromJust life >= cs^.ctrlTick
+     then moddedObjs
+     else []
+  where life = objectLife obj
+        moddedObjs =
+          case objectMod obj of
+            NoMod -> [obj]
+            LocalMod ->
+              case Map.lookup (objectMod obj) (cs^.ctrlInputs) of
+                Nothing -> [obj]
+                Just (Modification rot acc fire) ->
+                  let newObj = obj
+                       { objectRot = rot
+                       , objectAcc = angle rot ^* acc
+                       }
+                      -- Note: we are relying on laziness here: if objectCannon
+                      -- is Nothing the pObj never gets evaluated.
+                      pObj = projectile (fromJust . objectCannon $ obj) (cs^.ctrlTick) newObj
+                      pList = if cs^.ctrlTick /= fire || isNothing (objectCannon obj)
+                                 then []
+                                 else [pObj]
+                   in newObj : pList
 
 type ExtractFunction a b = Object a -> (State a b -> State a b)
 
