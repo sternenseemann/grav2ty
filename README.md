@@ -11,6 +11,7 @@ the most realistic asteroids-like game in existence.
 * `c`: toggle centered view
 * `+`/`-`: zoom in/out
 * `,`/`.`: slow time down / speed it up
+* `space`: fire a projectile
 
 ## roadmap
 
@@ -22,9 +23,10 @@ the most realistic asteroids-like game in existence.
 - [ ] Free viewport (mouse moved)
 - [x] time scaling / fast forward
 - [x] rework HUD, log additional info to console
-- [ ] Add speed to HUD
-- [ ] projectiles
-- [ ] multi player support (?)
+  - [ ] Add speed to HUD
+- [x] projectiles
+  - [ ] Limit firerate, make projectiles self-destruct
+- [ ] multi player support
 - [ ] cosmetics (improved models, stars, …)
 - [ ] switch rendering engine
 - [ ] orbit visualization / prediction

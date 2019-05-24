@@ -16,6 +16,8 @@ module Grav2ty.Simulation
   , rotateHitbox
   , collision
   , collisionWithWorld
+  -- * Exposed Utilities
+  , rotateV2
   ) where
 
 import Control.Lens
@@ -54,16 +56,19 @@ translateHitbox t (HCombined hs) = HCombined . map (translateHitbox t) $ hs
 complexV2 :: Iso' (Complex a) (V2 a)
 complexV2 = iso (\(x :+ y) -> V2 x y) (\(V2 x y) -> x :+ y)
 
+-- | Rotate a point by an radial angle around @V2 0 0@
+rotateV2 :: RealFloat a => a -> V2 a -> V2 a
+rotateV2 angle p = (^. complexV2) . (* rotator) . (^. from complexV2) $ p
+  where rotator = cos angle :+ sin angle
+
 -- TODO address inaccuracies of 'Float' and 'Double'?
 -- | Rotate a 'Hitbox' by a radial angle.
 rotateHitbox :: RealFloat a => a -> Hitbox a -> Hitbox a
 rotateHitbox angle box =
   case box of
-    HLine a b -> HLine (rotate a) (rotate b)
-    HCircle c r -> HCircle (rotate c) r
+    HLine a b -> HLine (rotateV2 angle a) (rotateV2 angle b)
+    HCircle c r -> HCircle (rotateV2 angle c) r
     HCombined l -> HCombined . map (rotateHitbox angle) $ l
-  where rotator = cos angle :+ sin angle
-        rotate = (^. complexV2) . (* rotator) . (^. from complexV2)
 
 -- | Returns the 'Hitbox' for an 'Object', but rotated and translated
 --   to the location it is *actually* at.
@@ -148,6 +153,12 @@ data Modifier
   | External Integer -- ^ Object is modified by an external source / other players.
   deriving(Eq, Ord, Show)
 
+-- | @Just (<cannon position>, <cannon direction>)@ describes origin and
+--   trajectory of projectiles of this object. Note that both position and
+--   direction are rotated by 'objectRot'. @Nothing@ means that projectiles
+--   are disabled for the particular 'Object'.
+type Cannon a = Maybe (V2 a, V2 a)
+
 data Object a
   = Dynamic
   { objectHitbox :: Hitbox a  -- ^  hitbox of the object. Hitbox points at
@@ -163,6 +174,8 @@ data Object a
                               --   projectile.
   , objectMod    :: Modifier  -- ^ If and how the Object can be modified during
                               --   the simulation.
+  , objectCannon :: Cannon a  -- ^ Point and Direction projectiles can or can not
+                              --   be fired from.
   }
   | Static
   { objectHitbox :: Hitbox a -- ^ See above.
