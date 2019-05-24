@@ -19,10 +19,12 @@ the most realistic asteroids-like game in existence.
 - [x] collision detection
 - [ ] make measurements more realistic
 - [x] allow for zooming the viewport
+- [ ] Free viewport (mouse moved)
 - [x] time scaling / fast forward
-- [ ] rework HUD, log additional info to console
-- [ ] cosmetics (improved models, stars, …)
-- [ ] projectiles & targets
+- [x] rework HUD, log additional info to console
+- [ ] Add speed to HUD
+- [ ] projectiles
 - [ ] multi player support (?)
+- [ ] cosmetics (improved models, stars, …)
 - [ ] switch rendering engine
 - [ ] orbit visualization / prediction
