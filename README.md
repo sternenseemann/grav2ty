@@ -1,6 +1,6 @@
 # grav2ty :rocket:
 
-![screenshot of grav2ty showing a spaceship and a planet](./doc/grav2ty-first-commit.png)
+![screenshot of grav2ty showing a spaceship, a planet, an asteroid orbiting and two projectiles](./doc/grav2ty-2019-05-24.png)
 
 the most realistic asteroids-like game in existence.
 
@@ -31,3 +31,8 @@ the most realistic asteroids-like game in existence.
 - [ ] cosmetics (improved models, stars, …)
 - [ ] switch rendering engine
 - [ ] orbit visualization / prediction
+
+## history
+
+* screenshot of [grav2ty at its first commit](./doc/grav2ty-first-commit.png)
+* the previous attempt [grav1ty](https://github.com/sternenseemann/grav2ty/tree/grav1ty)
