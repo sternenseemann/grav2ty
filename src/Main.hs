@@ -83,7 +83,7 @@ eventHandler (EventKey key Down _ _) state = action state
         updateLocalMod l f = over (control.ctrlInputs.at LocalMod ._Just.l) f
         accStep = 1
         rotStep = pi / 10
-        scaleStep = 0.05
+        scaleStep = 1.1
         timeStep = 0.2
         mod2pi = flip mod' (2 * pi)
         action =
@@ -94,8 +94,8 @@ eventHandler (EventKey key Down _ _) state = action state
             SpecialKey KeyRight -> updateLocalMod modRot (mod2pi . (subtract rotStep))
             SpecialKey KeySpace -> updateLocalMod modFire (const $ state^.control.ctrlTick + 10)
             Char 'c' -> over (graphics.glossCenterView) not
-            Char '+' -> over (graphics.glossViewPortScale) (+ scaleStep)
-            Char '-' -> over (graphics.glossViewPortScale) (subtract scaleStep)
+            Char '+' -> over (graphics.glossViewPortScale) (* scaleStep)
+            Char '-' -> over (graphics.glossViewPortScale) (/ scaleStep)
             Char '.' -> over (control.ctrlTimeScale) (+ timeStep)
             Char ',' -> over (control.ctrlTimeScale) (boundSub 0 timeStep)
             _ -> id
