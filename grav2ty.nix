@@ -3,10 +3,12 @@ mkDerivation {
   pname = "grav2ty";
   version = "0.1.0.0";
   src = ./.;
-  isLibrary = false;
+  isLibrary = true;
   isExecutable = true;
+  enableLibraryProfiling = true;
+  enableExecutableProfiling = true;
   libraryHaskellDepends = [ base containers lens linear ];
   executableHaskellDepends = [ base containers gloss linear ];
-  doHaddock = false;
+  doHaddock = true;
   license = stdenv.lib.licenses.gpl3;
 }
