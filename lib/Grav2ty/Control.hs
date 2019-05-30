@@ -104,7 +104,8 @@ updateState t extract state =
         updateAndExtract acc@(seq, f) x =
           if isDynamic x && (anyU relColl x objectRel == Just True)
              then acc
-             else (updateObject' x >< seq, (.) <$> extract x <*> f)
+             else (updateObject' x >< seq, chainFun (extract x) f)
+        chainFun x f = if isJust f then (.) <$> x <*> f else x
         objectRel = objectRelGraph oldWorld
         scaledT = state^.control^.ctrlTimeScale * t
         updateObject' obj =
