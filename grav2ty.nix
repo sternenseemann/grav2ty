@@ -12,6 +12,8 @@ mkDerivation {
   testHaskellDepends = [ base tasty tasty-quickcheck ];
   doHaddock = true;
   doCheck = true;
+  enableLibraryProfiling = true;
+  enableExecutableProfiling = true;
   description = "a 2d space (ship) game with realistic physics-based gameplay";
   license = stdenv.lib.licenses.gpl3;
 }
