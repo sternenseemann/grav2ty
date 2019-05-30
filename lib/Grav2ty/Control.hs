@@ -13,6 +13,7 @@ module Grav2ty.Control
   ) where
 
 import Grav2ty.Simulation
+import Grav2ty.Util.UGraph
 
 import Control.Lens
 import Data.Foldable
@@ -101,10 +102,10 @@ updateState t extract state =
   where oldWorld = state^.world
         (newWorld, updateState') = foldl' updateAndExtract (S.empty, Nothing) oldWorld
         updateAndExtract acc@(seq, f) x =
-          if coll x
+          if isDynamic x && (anyU relColl x objectRel == Just True)
              then acc
              else (updateObject' x >< seq, (.) <$> extract x <*> f)
-        coll obj = isDynamic obj && collisionWithWorld oldWorld obj
+        objectRel = objectRelGraph oldWorld
         scaledT = state^.control^.ctrlTimeScale * t
         updateObject' obj =
           fmap (updateObject scaledT (gravitationForces oldWorld obj))

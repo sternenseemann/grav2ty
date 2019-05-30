@@ -8,6 +8,8 @@ module Grav2ty.Simulation
   , World (..)
   , updateObject
   , gravitationForces
+  , ObjRel (..)
+  , objectRelGraph
   -- * Hitboxes
   , Hitbox (..)
   , shipHitbox
@@ -15,10 +17,12 @@ module Grav2ty.Simulation
   , translateHitbox
   , rotateHitbox
   , collision
-  , collisionWithWorld
+  , objectCollision
   -- * Exposed Utilities
   , rotateV2
   ) where
+
+import Grav2ty.Util.UGraph
 
 import Control.Lens
 import Data.Complex
@@ -146,12 +150,10 @@ collision (HLine a1 b1) (HLine a2 b2) =
 collision (HCombined as) b = any (collision b) as
 collision a b@(HCombined _) = collision b a
 
-collisionWithWorld :: (Ord a, RealFloat a) => World a -> Object a -> Bool
-collisionWithWorld world obj = any
-  (\obj' ->
-    obj /= obj' &&
-    (objectLoc obj == objectLoc obj'
-      ||  collision (realHitbox obj) (realHitbox obj'))) world
+objectCollision :: RealFloat a => Object a -> Object a -> Bool
+objectCollision a b = a /= b &&
+  ((objectLoc a == objectLoc b)
+    || collision (realHitbox a) (realHitbox b))
 
 data Modifier
   = NoMod            -- ^ Not modified, purely physics based.
@@ -213,6 +215,13 @@ gravitationForces world obj = foldl' calcSum (pure 0) world
   where calcSum force x = if separated obj x
                              then force + gravitationForce obj x
                              else force
+
+data ObjRel a = ObjRel
+  { relColl :: Bool
+  } deriving (Show, Eq, Ord)
+
+objectRelGraph :: (RealFloat a, Ord a) => World a -> UGraph (Object a) (ObjRel a)
+objectRelGraph = insertSeq (\a b -> ObjRel $ objectCollision a b) emptyU
 
 updateObject :: Fractional a =>  a -> V2 a -> Object a -> Object a
 updateObject _ _ obj@Static {} = obj

@@ -6,6 +6,7 @@ module Grav2ty.Util.UGraph
   , insertU
   , insertSeq
   , lookupU
+  , anyU
   -- * Props
   , prop_undirected
   , prop_undirected'
@@ -27,13 +28,16 @@ insertU x y v = UGraph . M.alter (alterOuter x) y . M.alter (alterOuter y) x . u
   where alterOuter i Nothing  = Just $ M.singleton i v
         alterOuter i (Just m) = Just $ M.insert i v m
 
-insertSeq :: Ord a => Seq a -> (a -> a -> v) -> UGraph a v -> UGraph a v
-insertSeq seq f g = ins seq g
+insertSeq :: Ord a => (a -> a -> v) -> UGraph a v -> Seq a -> UGraph a v
+insertSeq f g seq = ins seq g
   where ins (x :<| s) acc = ins s (foldl' (\g el -> insertU x el (f x el) g) acc s)
         ins mempty acc = acc
 
 lookupU :: Ord a => a -> a -> UGraph a v -> Maybe v
 lookupU x y = (>>= (M.lookup y)) . M.lookup x . unUGraph
+
+anyU :: Ord a => (v -> Bool) -> a -> UGraph a v -> Maybe Bool
+anyU f x = fmap (foldl (\b x -> b || f x) False) . M.lookup x . unUGraph
 
 prop_undirected' :: (Ord a, Eq v) => UGraph a v -> a -> a -> Bool
 prop_undirected' g x y = lookupU x y g == lookupU y x g
