@@ -8,7 +8,9 @@ import Grav2ty.Control
 import Control.Lens
 import Linear.V2
 import Data.Fixed (mod')
+import Data.Foldable
 import Data.Maybe
+import qualified Data.Sequence as S
 import Data.Tuple (uncurry)
 import qualified Data.Map as Map
 import Data.Map.Lens
@@ -58,7 +60,7 @@ renderStars center = undefined
 
 renderGame :: State Float GlossState -> Picture
 renderGame state = Pictures [ renderUi  state, applyViewPort objs ]
-  where objs = Pictures . map renderObject $ state^.world
+  where objs = Pictures . foldl' (\l x -> renderObject x : l) [] $ state^.world
         applyViewPort = if state^.graphics . glossCenterView
                            then applyViewPortToPicture viewport
                            else id
@@ -104,21 +106,27 @@ eventHandler _ s = s
 
 updateWorld :: Float -> State Float GlossState -> State Float GlossState
 updateWorld ts state = updateState ts extract state
-  where extract obj@Dynamic { objectMod = LocalMod } = set
+  where extract obj@Dynamic { objectMod = LocalMod } = Just $ set
           (graphics.glossViewPortCenter)
           (vectorToPoint . objectLoc $ obj)
-        extract _ = id
+        extract _ = Nothing
 
 initialWorld :: Fractional a => State a GlossState
 initialWorld = State
   (ControlState (Map.fromList [(LocalMod, zeroModification)]) 1 0)
-  (GlossState (800, 800) (0, 0) 1 True)
-  [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod (Just (V2 15 0, V2 1 0)) Nothing
-  , Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod Nothing Nothing
-  , Static (centeredCircle 80) 0 moonMass (V2 0 0)
+  (GlossState (800, 800) (0, 0) 1 True) $ S.fromList
+    [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod (Just (V2 15 0, V2 1 0)) Nothing
+    , Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod Nothing Nothing
+    , Static (centeredCircle 80) 0 moonMass (V2 0 0)
 --  , Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 250)
-  ]
+    ]
   where moonMass = 8e14
+
+testWorld :: State Float GlossState
+testWorld = State
+  (ControlState (Map.empty) 1 0)
+  (GlossState (800, 800) (0, 0) 1 True) .  S.fromList $
+    map (\x -> Dynamic (centeredCircle 2) 0 1000000 (V2 0 (fromIntegral x * 5)) (V2 0 0) (V2 0 0) NoMod Nothing Nothing) [1..10]
 
 main :: IO ()
 main = play

@@ -22,6 +22,9 @@ module Grav2ty.Simulation
 
 import Control.Lens
 import Data.Complex
+import Data.Foldable
+import Data.Sequence (Seq (..))
+import qualified Data.Sequence as S
 import Linear.Matrix
 import Linear.Metric (norm, distance)
 import Linear.V2
@@ -144,8 +147,11 @@ collision (HCombined as) b = any (collision b) as
 collision a b@(HCombined _) = collision b a
 
 collisionWithWorld :: (Ord a, RealFloat a) => World a -> Object a -> Bool
-collisionWithWorld world obj = any (\obj' ->
-  obj /= obj' && collision (realHitbox obj) (realHitbox obj')) world
+collisionWithWorld world obj = any
+  (\obj' ->
+    obj /= obj' &&
+    (objectLoc obj == objectLoc obj'
+      ||  collision (realHitbox obj) (realHitbox obj'))) world
 
 data Modifier
   = NoMod            -- ^ Not modified, purely physics based.
@@ -189,7 +195,7 @@ isDynamic :: Object a -> Bool
 isDynamic Dynamic {} = True
 isDynamic _ = False
 
-type World a = [Object a]
+type World a = Seq (Object a)
 
 separated :: (Floating a, Ord a) => Object a -> Object a -> Bool
 separated a b = distance (objectLoc a) (objectLoc b) > 3
@@ -202,18 +208,17 @@ gravitationForce a b = (gravityConst *
         distance = objectLoc b - objectLoc a
         absDistance = norm distance
 
-gravitationForces :: (Ord a, Floating a) => [Object a] -> Object a -> [V2 a]
-gravitationForces []     _   = []
-gravitationForces (w:ws) obj =
-  if separated obj w
-     then gravitationForce obj w : gravitationForces ws obj
-     else gravitationForces ws obj
+gravitationForces :: (Ord a, Floating a) => World a -> Object a -> V2 a
+gravitationForces world obj = foldl' calcSum (pure 0) world
+  where calcSum force x = if separated obj x
+                             then force + gravitationForce obj x
+                             else force
 
-updateObject :: Fractional a =>  a -> [V2 a] -> Object a -> Object a
+updateObject :: Fractional a =>  a -> V2 a -> Object a -> Object a
 updateObject _ _ obj@Static {} = obj
-updateObject timeStep forces obj@Dynamic {} = obj
+updateObject timeStep force obj@Dynamic {} = obj
     { objectLoc   = objectLoc obj + (objectSpeed obj ^* timeStep)
     , objectSpeed = objectSpeed obj +
-      (((sum forces ^/ objectMass obj) + objectAcc obj) ^* timeStep)
+      (((force ^/ objectMass obj) + objectAcc obj) ^* timeStep)
     }
 

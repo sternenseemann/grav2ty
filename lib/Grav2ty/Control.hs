@@ -15,7 +15,10 @@ module Grav2ty.Control
 import Grav2ty.Simulation
 
 import Control.Lens
+import Data.Foldable
 import Data.Maybe
+import Data.Sequence ((<|), (|>), (><))
+import qualified Data.Sequence as S
 import Linear.V2
 import Linear.Vector
 import qualified Data.Map as Map
@@ -62,19 +65,19 @@ projectile (pos,speed) tick ship =
   where pPos = objectLoc ship + rotateV2 (objectRot ship) pos
         pSpeed = (15 * rotateV2 (objectRot ship) speed) + objectSpeed ship
 
-applyControls :: RealFloat a => ControlState a -> Object a -> [Object a]
-applyControls _ obj@Static {} = [obj]
+applyControls :: RealFloat a => ControlState a -> Object a -> World a
+applyControls _ obj@Static {} = S.singleton obj
 applyControls cs obj@Dynamic {} =
   if isNothing life || fromJust life >= cs^.ctrlTick
      then moddedObjs
-     else []
+     else S.empty
   where life = objectLife obj
         moddedObjs =
           case objectMod obj of
-            NoMod -> [obj]
+            NoMod -> S.singleton obj
             LocalMod ->
               case Map.lookup (objectMod obj) (cs^.ctrlInputs) of
-                Nothing -> [obj]
+                Nothing -> S.singleton obj
                 Just (Modification rot acc fire) ->
                   let newObj = obj
                        { objectRot = rot
@@ -83,28 +86,26 @@ applyControls cs obj@Dynamic {} =
                       -- Note: we are relying on laziness here: if objectCannon
                       -- is Nothing the pObj never gets evaluated.
                       pObj = projectile (fromJust . objectCannon $ obj) (cs^.ctrlTick) newObj
-                      pList = if cs^.ctrlTick /= fire || isNothing (objectCannon obj)
-                                 then []
-                                 else [pObj]
-                   in newObj : pList
+                   in if cs^.ctrlTick /= fire || isNothing (objectCannon obj)
+                                 then S.singleton newObj
+                                 else S.fromList [pObj, newObj]
 
-type ExtractFunction a b = Object a -> (State a b -> State a b)
+type ExtractFunction a b = Object a -> Maybe (State a b -> State a b)
 
 updateState :: (RealFloat a, Ord a) => a -> ExtractFunction a b
                 -> State a b -> State a b
 updateState t extract state =
   over (control.ctrlTick) (+ 1)
   . set world newWorld
-  . updateState' $ state
+  . fromMaybe id updateState' $ state
   where oldWorld = state^.world
-        (newWorld, updateState') = tailCall oldWorld ([], id)
-        tailCall [] acc = acc
-        tailCall (x:xs) (nw, f) = tailCall xs $
+        (newWorld, updateState') = foldl' updateAndExtract (S.empty, Nothing) oldWorld
+        updateAndExtract acc@(seq, f) x =
           if coll x
-             then (nw, f)
-             else (updateObject' x ++ nw, extract x . f)
+             then acc
+             else (updateObject' x >< seq, (.) <$> extract x <*> f)
         coll obj = isDynamic obj && collisionWithWorld oldWorld obj
         scaledT = state^.control^.ctrlTimeScale * t
         updateObject' obj =
-          map (updateObject scaledT (gravitationForces oldWorld obj))
+          fmap (updateObject scaledT (gravitationForces oldWorld obj))
           . applyControls (state^.control) $ obj
