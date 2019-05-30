@@ -50,3 +50,4 @@ test-suite lib-test
                      , tasty ^>=1.2
                      , tasty-quickcheck ^>=0.10
                      , grav2ty-lib
+  default-language:    Haskell2010
