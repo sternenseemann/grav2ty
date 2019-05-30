@@ -24,7 +24,8 @@ uGraph :: TestTree
 uGraph = testGroup "Grav2ty.Util.UGraph"
   [ QC.testProperty "Check undirectedness" (prop_undirected :: UGraph Int Bool -> Bool)
   , QC.testProperty "Check undirectedness (with vertices not in the graph)" (prop_undirected' :: UGraph Char Int -> Char -> Char -> Bool)
-  , QC.testProperty "Check insertion and lookup correctness" (prop_insertLookup :: Integer -> Integer ->  String -> Bool)
+  , QC.testProperty "Check insertion and lookup correctness" (prop_insertLookup :: Integer -> Integer ->  String -> UGraph Integer String -> Bool)
+  , QC.testProperty "Check insertion and lookup correctness w/o overwrite" (prop_insertLookupNoOv :: Integer -> Integer ->  String -> Bool)
   ]
 
 libTests :: TestTree
