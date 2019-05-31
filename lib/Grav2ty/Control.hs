@@ -13,7 +13,7 @@ module Grav2ty.Control
   ) where
 
 import Grav2ty.Simulation
-import Grav2ty.Util.UGraph
+import Grav2ty.Util.RelGraph
 
 import Control.Lens
 import Data.Foldable
@@ -93,7 +93,7 @@ applyControls cs obj@Dynamic {} =
 
 type ExtractFunction a b = Object a -> Maybe (State a b -> State a b)
 
-updateState :: (RealFloat a, Ord a) => a -> ExtractFunction a b
+updateState :: (Show a, RealFloat a, Ord a) => a -> ExtractFunction a b
                 -> State a b -> State a b
 updateState t extract state =
   over (control.ctrlTick) (+ 1)
@@ -102,12 +102,13 @@ updateState t extract state =
   where oldWorld = state^.world
         (newWorld, updateState') = foldl' updateAndExtract (S.empty, Nothing) oldWorld
         updateAndExtract acc@(seq, f) x =
-          if isDynamic x && (anyU relColl x objectRel == Just True)
+          if isDynamic x && (anyFrom _relColl x objectRel == Just True)
              then acc
              else (updateObject' x >< seq, chainFun (extract x) f)
         chainFun x f = if isJust f then (.) <$> x <*> f else x
         objectRel = objectRelGraph oldWorld
+        getForce obj = foldlFrom' (\f r -> f + _relForce r) (V2 0 0) obj objectRel
         scaledT = state^.control^.ctrlTimeScale * t
         updateObject' obj =
-          fmap (updateObject scaledT (gravitationForces oldWorld obj))
+          fmap (updateObject scaledT (getForce obj))
           . applyControls (state^.control) $ obj

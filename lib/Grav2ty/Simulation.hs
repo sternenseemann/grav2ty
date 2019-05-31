@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Grav2ty.Simulation
   (
   -- * Objects
@@ -7,7 +8,7 @@ module Grav2ty.Simulation
   , isDynamic
   , World (..)
   , updateObject
-  , gravitationForces
+  , gravitationForce
   , ObjRel (..)
   , objectRelGraph
   -- * Hitboxes
@@ -22,7 +23,7 @@ module Grav2ty.Simulation
   , rotateV2
   ) where
 
-import Grav2ty.Util.UGraph
+import Grav2ty.Util.RelGraph
 
 import Control.Lens
 import Data.Complex
@@ -217,11 +218,19 @@ gravitationForces world obj = foldl' calcSum (pure 0) world
                              else force
 
 data ObjRel a = ObjRel
-  { relColl :: Bool
+  { _relColl  :: Bool -- ^ Wether the two 'Object's collide
+  , _relForce :: V2 a -- ^ The gravitation force between them
   } deriving (Show, Eq, Ord)
 
-objectRelGraph :: (RealFloat a, Ord a) => World a -> UGraph (Object a) (ObjRel a)
-objectRelGraph = insertSeq (\a b -> ObjRel $ objectCollision a b) emptyU
+makeLenses 'ObjRel
+
+objectRelGraph :: (RealFloat a, Ord a) => World a -> RelGraph (Object a) (ObjRel a)
+objectRelGraph = insertSeq rel emptyRel
+  where rel a b = let res = ObjRel (objectCollision a b) (gravity a b)
+                   in (res, over relForce negated res)
+        gravity a b = if separated a b
+                         then gravitationForce a b
+                         else pure 0
 
 updateObject :: Fractional a =>  a -> V2 a -> Object a -> Object a
 updateObject _ _ obj@Static {} = obj

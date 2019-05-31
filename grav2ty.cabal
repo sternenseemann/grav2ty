@@ -21,7 +21,7 @@ extra-source-files:  CHANGELOG.md
 library grav2ty-lib
   exposed-modules:     Grav2ty.Simulation
                      , Grav2ty.Control
-                     , Grav2ty.Util.UGraph
+                     , Grav2ty.Util.RelGraph
   -- other-extensions:
   build-depends:       base ^>=4.12.0.0
                      , containers ^>=0.6.0.1
