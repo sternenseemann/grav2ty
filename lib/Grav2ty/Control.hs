@@ -104,8 +104,11 @@ updateState t extract state =
         updateAndExtract acc@(seq, f) x =
           if isDynamic x && (anyFrom _relColl x objectRel == Just True)
              then acc
-             else (updateObject' x >< seq, chainFun (extract x) f)
-        chainFun x f = if isJust f then (.) <$> x <*> f else x
+             else let updated = updateObject' x
+                   in (updated >< seq, foldl' chainFun f (fmap extract updated))
+        chainFun x@(Just _) f@(Just _) = (.) <$> x <*> f
+        chainFun Nothing f = f
+        chainFun x Nothing = x
         objectRel = objectRelGraph oldWorld
         getForce obj = foldlFrom' (\f r -> f + _relForce r) (V2 0 0) obj objectRel
         scaledT = state^.control^.ctrlTimeScale * t
