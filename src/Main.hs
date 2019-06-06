@@ -50,7 +50,7 @@ renderUi :: (PrintfArg a, Num a) => State a GlossState -> Picture
 renderUi state = (uncurry translate) (homBimap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
   . view (graphics . glossViewPort) $ state)
   . scale 0.2 0.2 . Color green . Text $ uiText
-  where uiText = printf "Acceleration: %.0f TimeScale: %.1f Tick: %d" acc timeScale tick
+  where uiText = printf "Acceleration: %.0f TimeScale: %.0f Tick: %d" acc timeScale tick
         acc = fromMaybe 0 $ state^?control.ctrlInputs.at LocalMod ._Just.modAcc
         timeScale = state^.control.ctrlTimeScale
         tick = state^.control^.ctrlTick
@@ -86,7 +86,7 @@ eventHandler (EventKey key Down _ _) state = action state
         accStep = 1
         rotStep = pi / 10
         scaleStep = 1.1
-        timeStep = 0.2
+        timeStep = 1.0
         mod2pi = flip mod' (2 * pi)
         action =
           case key of
