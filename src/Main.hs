@@ -1,18 +1,20 @@
 {-# LANGUAGE TemplateHaskell  #-}
 {-# LANGUAGE Rank2Types       #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Main where
 
+import Grav2ty.Core
 import Grav2ty.Simulation
 import Grav2ty.Control
 
 import Control.Lens
 import Linear.V2
+import Control.Monad.Trans.State.Strict
 import Data.Fixed (mod')
 import Data.Foldable
 import Data.Maybe
-import qualified Data.Sequence as S
 import Data.Tuple (uncurry)
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as M
 import Data.Map.Lens
 import Text.Printf
 
@@ -46,22 +48,22 @@ renderHitbox box =  Color white $
 renderObject :: Object Float -> Picture
 renderObject obj = renderHitbox . realHitbox $ obj
 
-renderUi :: (PrintfArg a, Num a) => State a GlossState -> Picture
+renderUi :: (PrintfArg a, Num a) => Grav2tyState a GlossState -> Picture
 renderUi state = (uncurry translate) (homBimap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
-  . view (graphics . glossViewPort) $ state)
+  . (^. graphics.glossViewPort) $ state)
   . scale 0.2 0.2 . Color green . Text $ uiText
-  where uiText = printf "Acceleration: %.0f TimeScale: %.0f Tick: %d" acc timeScale tick
-        acc = fromMaybe 0 $ state^?control.ctrlInputs.at LocalMod ._Just.modAcc
-        timeScale = state^.control.ctrlTimeScale
-        tick = state^.control^.ctrlTick
+  where uiText = printf "Acceleration: %.0f Time/Tick: %f Tick: %d" acc tpt t
+        acc = fromMaybe 0 $ state^?inputs.at LocalMod ._Just.modAcc
+        t = state^.tick
+        tpt = state^.timePerTick
 
 renderStars :: (Float, Float) -> Picture
 renderStars center = undefined
 
-renderGame :: State Float GlossState -> Picture
+renderGame :: Grav2tyState Float GlossState -> Picture
 renderGame state = Pictures [ renderUi  state, applyViewPort objs ]
   where objs = Pictures . foldl' (\l x -> renderObject x : l) [] $ state^.world
-        applyViewPort = if state^.graphics . glossCenterView
+        applyViewPort = if state^.graphics.glossCenterView
                            then applyViewPortToPicture viewport
                            else id
         viewport = ViewPort
@@ -78,11 +80,11 @@ boundAdd max a x = if res > max then max else res
   where res = x + a
 
 eventHandler :: (Show a, Ord a, Real a, Floating a) => Event
-             -> State a GlossState -> State a GlossState
+             -> Grav2tyState a GlossState -> Grav2tyState a GlossState
 eventHandler (EventKey key Down _ _) state = action state
   where updateLocalMod :: Lens' (Modification a) b -> (b -> b)
-                       -> State a GlossState -> State a GlossState
-        updateLocalMod l f = over (control.ctrlInputs.at LocalMod ._Just.l) f
+                       -> Grav2tyState a GlossState -> Grav2tyState a GlossState
+        updateLocalMod l f = over (inputs.at LocalMod ._Just.l) f
         accStep = 1
         rotStep = pi / 10
         scaleStep = 1.1
@@ -94,39 +96,30 @@ eventHandler (EventKey key Down _ _) state = action state
             SpecialKey KeyDown -> updateLocalMod modAcc (boundSub 0 accStep)
             SpecialKey KeyLeft -> updateLocalMod modRot (mod2pi . (+ rotStep))
             SpecialKey KeyRight -> updateLocalMod modRot (mod2pi . (subtract rotStep))
-            SpecialKey KeySpace -> updateLocalMod modFire (const $ state^.control.ctrlTick + 10)
+            SpecialKey KeySpace -> updateLocalMod modFire (const $ state^.tick + 10)
             Char 'c' -> over (graphics.glossCenterView) not
             Char '+' -> over (graphics.glossViewPortScale) (* scaleStep)
             Char '-' -> over (graphics.glossViewPortScale) (/ scaleStep)
-            Char '.' -> over (control.ctrlTimeScale) (+ timeStep)
-            Char ',' -> over (control.ctrlTimeScale) (boundSub 0 timeStep)
             _ -> id
 eventHandler (EventResize vp) state = set (graphics.glossViewPort) vp state
 eventHandler _ s = s
 
-updateWorld :: Float -> State Float GlossState -> State Float GlossState
-updateWorld ts state = updateState ts extract state
-  where extract obj@Dynamic { objectMod = LocalMod } = Just $ set
-          (graphics.glossViewPortCenter)
-          (vectorToPoint . objectLoc $ obj)
-        extract _ = Nothing
+updateWorld :: Float -> Grav2tyState Float GlossState -> Grav2tyState Float GlossState
+updateWorld ts state = snd . flip runState state $ timePerTick .= ts >> processTick hook
+  where hook obj@Dynamic { objectMod = LocalMod } =
+          graphics.glossViewPortCenter .= (vectorToPoint . objectLoc $ obj)
+        hook _ = pure ()
 
-initialWorld :: Fractional a => State a GlossState
-initialWorld = State
-  (ControlState (Map.fromList [(LocalMod, zeroModification)]) 1 0)
-  (GlossState (800, 800) (0, 0) 1 True) $ S.fromList
-    [ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod (Just (V2 15 0, V2 1 0)) Nothing
-    , Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod Nothing Nothing
-    , Static (centeredCircle 80) 0 moonMass (V2 0 0)
---  , Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 250)
-    ]
+initialWorld :: Fractional a => Grav2tyState a GlossState
+initialWorld = snd . flip runState (Grav2tyState 0 (1/300)
+  (M.fromList [(LocalMod, zeroModification)])
+  (GlossState (800, 800) (0, 0) 1 True)
+  mempty 0) $ do
+    addObject $ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) LocalMod (Just (V2 15 0, V2 1 0)) Nothing
+    addObject $ Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod Nothing Nothing
+    addObject $ Static (centeredCircle 80) 0 moonMass (V2 0 0)
+--  addObject $ Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 250)
   where moonMass = 8e14
-
-testWorld :: State Float GlossState
-testWorld = State
-  (ControlState (Map.empty) 1 0)
-  (GlossState (800, 800) (0, 0) 1 True) .  S.fromList $
-    map (\x -> Dynamic (centeredCircle 2) 0 1000000 (V2 0 (fromIntegral x * 5)) (V2 0 0) (V2 0 0) NoMod Nothing Nothing) [1..10]
 
 main :: IO ()
 main = play

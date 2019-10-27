@@ -10,7 +10,6 @@ the most realistic asteroids-like game in existence.
 * `left`/`right`: rotate ship (counter)-clockwise
 * `c`: toggle centered view
 * `+`/`-`: zoom in/out
-* `,`/`.`: slow time down / speed it up
 * `space`: fire a projectile
 
 ## roadmap
@@ -27,7 +26,11 @@ the most realistic asteroids-like game in existence.
 - [x] projectiles
   - [ ] Limit firerate
   - [x] make projectiles self-destruct
+- [ ] performance improvements
+  - [ ] don't calculate gravity to every little object
+  - [ ] don't do collision detection at a safe distance
 - [ ] multi player support
+- [ ] Prevent library user from creating a broken state (by hiding lenses etc. if possible)
 - [ ] cosmetics (improved models, stars, …)
 - [ ] switch rendering engine
 - [ ] orbit visualization / prediction

@@ -1,64 +1,19 @@
-{-# LANGUAGE TemplateHaskell #-}
-module Grav2ty.Control
-  ( State (..)
-  , control, graphics, world
-  , ControlState (..)
-  , ctrlInputs, ctrlTimeScale, ctrlTick
-  , applyControls
-  , Modification (..)
-  , zeroModification
-  , modAcc, modRot, modFire
-  , ExtractFunction (..)
-  , updateState
-  ) where
+{-# LANGUAGE BlockArguments #-}
+module Grav2ty.Control (processTick) where
 
+import Grav2ty.Core
 import Grav2ty.Simulation
 import Grav2ty.Util.RelGraph
 
 import Control.Lens
-import Data.Foldable
+import Control.Monad (when, unless)
+import Data.Foldable (traverse_)
+import Data.Map (Map (..))
 import Data.Maybe
-import Data.Sequence ((<|), (|>), (><))
-import qualified Data.Sequence as S
 import Linear.V2
 import Linear.Vector
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as M
 
-data Modification a
-  = Modification
-  { _modRot :: a        -- ^ Rotation (angle in radiant) set by the modification
-  , _modAcc :: a        -- ^ Acceleration set by the modification
-  , _modFire :: Integer -- ^ Set to tick a projectile should be fired at
-  } deriving (Show, Eq, Ord)
-
-makeLenses ''Modification
-
-zeroModification :: Num a => Modification a
-zeroModification = Modification 0 0 (-1)
-
-data ControlState a
-  = ControlState
-  { _ctrlInputs :: Map.Map Modifier (Modification a)
-  -- ^ Map containing the Modifier and the modified values, mainly the
-  -- Radial angle the object is rotated at and the current acceleration
-  -- of the ship.
-  , _ctrlTimeScale :: a
-  -- ^ Scaling of time allowing for the simulation to be sped up or slowed down
-  , _ctrlTick :: Integer
-  -- ^ Current tick. Ticks are not of constant length, but depend on time scale
-  --   and the simulation steps per second.
-  } deriving (Show, Eq)
-
-makeLenses ''ControlState
-
-data State a g
-  = State
-  { _control  :: ControlState a
-  , _graphics :: g
-  , _world    :: World a
-  } deriving (Show, Eq)
-
-makeLenses ''State
 
 projectile :: RealFloat a => (V2 a, V2 a) -> Integer -> Object a -> Object a
 projectile (pos,speed) tick ship =
@@ -66,52 +21,54 @@ projectile (pos,speed) tick ship =
   where pPos = objectLoc ship + rotateV2 (objectRot ship) pos
         pSpeed = (15 * rotateV2 (objectRot ship) speed) + objectSpeed ship
 
-applyControls :: RealFloat a => ControlState a -> Object a -> World a
-applyControls _ obj@Static {} = S.singleton obj
-applyControls cs obj@Dynamic {} =
-  if isNothing life || fromJust life >= cs^.ctrlTick
-     then moddedObjs
-     else S.empty
-  where life = objectLife obj
-        moddedObjs =
-          case objectMod obj of
-            NoMod -> S.singleton obj
-            LocalMod ->
-              case Map.lookup (objectMod obj) (cs^.ctrlInputs) of
-                Nothing -> S.singleton obj
-                Just (Modification rot acc fire) ->
-                  let newObj = obj
-                       { objectRot = rot
-                       , objectAcc = angle rot ^* acc
-                       }
-                      -- Note: we are relying on laziness here: if objectCannon
-                      -- is Nothing the pObj never gets evaluated.
-                      pObj = projectile (fromJust . objectCannon $ obj) (cs^.ctrlTick) newObj
-                   in if cs^.ctrlTick /= fire || isNothing (objectCannon obj)
-                                 then S.singleton newObj
-                                 else S.fromList [pObj, newObj]
+getForce :: (Ord a, Num a) =>  ObjRelGraph a -> Id -> V2 a
+getForce objRel id = foldlFrom' (\f r -> f + _relForce r) (V2 0 0) id objRel
 
-type ExtractFunction a b = Object a -> Maybe (State a b -> State a b)
+applyControls :: (Monad m, RealFloat a)
+              => Id -> Object a -> Grav2ty a g m (Maybe (Object a))
+applyControls _ obj@Static {} = pure $ Just obj
+applyControls id obj@Dynamic {} = use tick >>= \currentTick ->
+  if fromMaybe False ((< currentTick) <$> objectLife obj)
+     then delObject id >> pure Nothing
+     else do
+       let mod = objectMod obj
+       modOfObj <- use (inputs.at mod)
+       if mod == NoMod || modOfObj == Nothing
+          then pure $ Just obj
+          else do
+            let Just (Modification rot acc fire) = modOfObj
+            -- inputs.at mod .= Nothing (doesn't work with current gloss impl,
+            --                           also not necessary…)
 
-updateState :: (Show a, RealFloat a, Ord a) => a -> ExtractFunction a b
-                -> State a b -> State a b
-updateState t extract state =
-  over (control.ctrlTick) (+ 1)
-  . set world newWorld
-  . fromMaybe id updateState' $ state
-  where oldWorld = state^.world
-        (newWorld, updateState') = foldl' updateAndExtract (S.empty, Nothing) oldWorld
-        updateAndExtract acc@(seq, f) x =
-          if isDynamic x && (anyFrom _relColl x objectRel == Just True)
-             then acc
-             else let updated = updateObject' x
-                   in (updated >< seq, foldl' chainFun f (fmap extract updated))
-        chainFun x@(Just _) f@(Just _) = (.) <$> x <*> f
-        chainFun Nothing f = f
-        chainFun x Nothing = x
-        objectRel = objectRelGraph oldWorld
-        getForce obj = foldlFrom' (\f r -> f + _relForce r) (V2 0 0) obj objectRel
-        scaledT = state^.control^.ctrlTimeScale * t
-        updateObject' obj =
-          fmap (updateObject scaledT (getForce obj))
-          . applyControls (state^.control) $ obj
+            -- TODO: lenses for Object
+            let newObj = obj { objectRot = rot, objectAcc = angle rot ^* acc }
+            when (currentTick == fire && isJust (objectCannon obj)) $
+              addObject (projectile (fromJust (objectCannon obj)) currentTick newObj)
+            pure $ Just newObj
+
+processObject :: (Monad m, RealFloat a)
+              => World a -> ObjRelGraph a
+              -> (Object a -> Grav2ty a g m ())
+              -> Id -> Object a
+              -> Grav2ty a g m ()
+processObject old rels hook id obj =
+  if isDynamic obj && (anyFrom _relColl id rels == Just True)
+     -- delete any dynamic object that collided with another object
+     then delObject id
+     else do
+       timeStep <- use timePerTick
+       newObj <- fmap (updateObject timeStep (getForce rels id)) <$> applyControls id obj
+       traverse (setObject (Just id)) newObj
+       traverse_ hook newObj
+
+processTick :: (Monad m, RealFloat a)
+            => (Object a -> Grav2ty a g m ())
+            -> Grav2ty a g m ()
+processTick objHook = do
+  oldWorld <- use world
+  let objRel = objectRelGraph oldWorld
+
+  use world >>= M.foldlWithKey' (\action id obj ->
+    action >> processObject oldWorld objRel objHook id obj) (pure ())
+
+  tick %= (+1)

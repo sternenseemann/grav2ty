@@ -6,4 +6,5 @@ let pkgs = import <nixpkgs> {};
         });
       };
     };
-in profiled.callPackage ./grav2ty.nix { }
+    drv = profiled.callPackage ./grav2ty.nix { };
+in if pkgs.lib.inNixShell then drv.env else drv

@@ -2,59 +2,34 @@
 module Grav2ty.Simulation
   (
   -- * Objects
-    Object (..)
-  , Modifier (..)
-  , realHitbox
-  , isDynamic
-  , World (..)
+    realHitbox
   , updateObject
   , gravitationForce
-  , ObjRel (..)
-  , objectRelGraph
   -- * Hitboxes
-  , Hitbox (..)
-  , shipHitbox
-  , centeredCircle
   , translateHitbox
   , rotateHitbox
   , collision
   , objectCollision
+  -- * Object Relations
+  , ObjRelGraph (..)
+  , ObjRel (..)
+  , objectRelGraph
   -- * Exposed Utilities
   , rotateV2
   ) where
 
+import Grav2ty.Core
 import Grav2ty.Util.RelGraph
 
 import Control.Lens
 import Data.Complex
 import Data.Foldable
-import Data.Sequence (Seq (..))
-import qualified Data.Sequence as S
+import Data.Map.Strict (Map (..))
+import qualified Data.Map.Strict as M
 import Linear.Matrix
 import Linear.Metric (norm, distance)
 import Linear.V2
 import Linear.Vector
-
-data Hitbox a
-  = HCombined [Hitbox a]
-  | HLine
-  { lineStart  :: V2 a
-  , lineEnd    :: V2 a
-  }
-  | HCircle
-  { circleLoc    :: V2 a
-  , circleRadius :: a
-  } deriving (Eq, Show, Ord)
-
-shipHitbox :: Num a => Hitbox a
-shipHitbox = HCombined
-  [ HLine (V2 (-10) (-5)) (V2 (-10) 5)
-  , HLine (V2 (-10) (-5)) (V2 10 0)
-  , HLine (V2 (-10) 5)    (V2 10 0)
-  ]
-
-centeredCircle :: Num a => a -> Hitbox a
-centeredCircle r = HCircle (V2 0 0) r
 
 translateHitbox :: Num a => V2 a -> Hitbox a -> Hitbox a
 translateHitbox t (HLine a b) = HLine (a + t) (b + t)
@@ -156,50 +131,6 @@ objectCollision a b = a /= b &&
   ((objectLoc a == objectLoc b)
     || collision (realHitbox a) (realHitbox b))
 
-data Modifier
-  = NoMod            -- ^ Not modified, purely physics based.
-  | LocalMod         -- ^ Object is modified by local client / player.
-  | External Integer -- ^ Object is modified by an external source / other players.
-  deriving(Eq, Ord, Show)
-
--- | @Just (<cannon position>, <cannon direction>)@ describes origin and
---   trajectory of projectiles of this object. Note that both position and
---   direction are rotated by 'objectRot'. @Nothing@ means that projectiles
---   are disabled for the particular 'Object'.
-type Cannon a = Maybe (V2 a, V2 a)
-
-data Object a
-  = Dynamic
-  { objectHitbox :: Hitbox a      -- ^ hitbox of the object. Hitbox points at
-                                  --   (V2 0 0) will always be at the center of
-                                  --   the object
-  , objectRot    :: a             -- ^ Radial angle
-  , objectMass   :: a             -- ^ mass of the object in kg
-  , objectLoc    :: V2 a          -- ^ Current location of the object.
-  , objectSpeed  :: V2 a          -- ^ Current speed of the Object. Used for
-                                  --   simulation approximation
-  , objectAcc    :: V2 a          -- ^ Current static Acceleration of the object.
-                                  --   0 unless controlled by the player or
-                                  --   projectile.
-  , objectMod    :: Modifier      -- ^ If and how the Object can be modified
-                                  --   during the simulation.
-  , objectCannon :: Cannon a      -- ^ Point and Direction projectiles can or
-                                  --   can not be fired from.
-  , objectLife   :: Maybe Integer -- ^ Tick the Object will be destroyed at.
-  }
-  | Static
-  { objectHitbox :: Hitbox a -- ^ See above.
-  , objectRot    :: a        -- ^ See above.
-  , objectMass   :: a        -- ^ See above.
-  , objectLoc    :: V2 a     -- ^ See above.
-  } deriving (Show, Eq, Ord)
-
-isDynamic :: Object a -> Bool
-isDynamic Dynamic {} = True
-isDynamic _ = False
-
-type World a = Seq (Object a)
-
 separated :: (Floating a, Ord a) => Object a -> Object a -> Bool
 separated a b = distance (objectLoc a) (objectLoc b) > 3
 
@@ -224,8 +155,10 @@ data ObjRel a = ObjRel
 
 makeLenses 'ObjRel
 
-objectRelGraph :: (RealFloat a, Ord a) => World a -> RelGraph (Object a) (ObjRel a)
-objectRelGraph = insertSeq rel emptyRel
+type ObjRelGraph a = RelGraph Id (ObjRel a)
+
+objectRelGraph :: (RealFloat a, Ord a) => World a -> ObjRelGraph a
+objectRelGraph = insertMapKey rel emptyRel
   where rel a b = let res = ObjRel (objectCollision a b) (gravity a b)
                    in (res, over relForce negated res)
         gravity a b = if separated a b

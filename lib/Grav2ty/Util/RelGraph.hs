@@ -5,10 +5,13 @@ module Grav2ty.Util.RelGraph
   , emptyRel
   , insertRel
   , insertRelNoOv
-  , insertSeq
+  , insertMap
+  , insertMapKey
   , lookupRel
   , anyFrom
   , foldlFrom'
+  -- * Unused
+  , insertSeq
   -- * Props
   , prop_relCorrectness
   , prop_insertLookup
@@ -18,7 +21,7 @@ module Grav2ty.Util.RelGraph
 import Data.Foldable
 import Data.Map.Strict (Map (..))
 import Data.Maybe
-import Data.Sequence (Seq (..), (<|))
+import Data.Sequence (Seq (..))
 import qualified Data.Map.Strict as M
 
 -- | Representation of a directed Relation Graph.
@@ -61,6 +64,26 @@ insertSeq f g seq = ins seq g
         ins mempty acc = acc
         folder x g el = let (v, v') = f x el
                        in insertRelNoOv x el v v' g
+
+-- | Takes a 'Map' of Vertices and a function that returns the relations for
+--   the associated edge and inserts them into a 'RelGraph'
+insertMap :: Ord a => (a -> a -> (v, v)) -> RelGraph a v -> Map k a -> RelGraph a v
+insertMap f g map = M.foldl' ins g map
+  where ins g x = foldl' (folder x) g map
+        folder x g el = let (v, v') = f x el
+                       in insertRelNoOv x el v v' g
+
+-- | Takes a 'Map' of Vertices and a function that returns the relations for
+--   the associated edge and inserts them into a 'RelGraph'. Instead of using
+--   the vertices themselves we use the keys of the vertices as keys in
+--   the 'RelGraph' as well.
+--
+--   TODO: prop
+insertMapKey :: Ord k => (a -> a -> (v, v)) -> RelGraph k v -> Map k a -> RelGraph k v
+insertMapKey f g map = M.foldlWithKey' ins g map
+  where ins g k x = M.foldlWithKey' (folder k x) g map
+        folder k x g k' el = let (v, v') = f x el
+                       in insertRelNoOv k k' v v' g
 
 -- | Lookup the Relation between two given Vertices.
 lookupRel :: Ord a => a -> a -> RelGraph a v -> Maybe v
