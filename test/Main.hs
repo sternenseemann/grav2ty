@@ -23,7 +23,7 @@ instance (Ord a, Arbitrary a, Arbitrary v) => Arbitrary (RelGraph a v) where
 
 relGraph :: TestTree
 relGraph = testGroup "Grav2ty.Util.UGraph"
-  [ QC.testProperty "Check relational properties of insertSeq" prop_relCorrectness
+  [ QC.testProperty "Check relational properties of insertMapKey" prop_relCorrectness
   , QC.testProperty "Check insertion and lookup correctness" (prop_insertLookup :: Integer -> Integer ->  String -> RelGraph Integer String -> Bool)
   , QC.testProperty "Check insertion and lookup correctness w/o overwrite" (prop_insertLookupNoOv :: Integer -> Integer ->  String -> Bool)
   ]

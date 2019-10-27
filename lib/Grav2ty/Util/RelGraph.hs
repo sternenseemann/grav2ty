@@ -5,7 +5,6 @@ module Grav2ty.Util.RelGraph
   , emptyRel
   , insertRel
   , insertRelNoOv
-  , insertMap
   , insertMapKey
   , lookupRel
   , anyFrom
@@ -66,19 +65,9 @@ insertSeq f g seq = ins seq g
                        in insertRelNoOv x el v v' g
 
 -- | Takes a 'Map' of Vertices and a function that returns the relations for
---   the associated edge and inserts them into a 'RelGraph'
-insertMap :: Ord a => (a -> a -> (v, v)) -> RelGraph a v -> Map k a -> RelGraph a v
-insertMap f g map = M.foldl' ins g map
-  where ins g x = foldl' (folder x) g map
-        folder x g el = let (v, v') = f x el
-                       in insertRelNoOv x el v v' g
-
--- | Takes a 'Map' of Vertices and a function that returns the relations for
 --   the associated edge and inserts them into a 'RelGraph'. Instead of using
 --   the vertices themselves we use the keys of the vertices as keys in
 --   the 'RelGraph' as well.
---
---   TODO: prop
 insertMapKey :: Ord k => (a -> a -> (v, v)) -> RelGraph k v -> Map k a -> RelGraph k v
 insertMapKey f g map = M.foldlWithKey' ins g map
   where ins g k x = M.foldlWithKey' (folder k x) g map
@@ -99,9 +88,9 @@ foldlFrom' :: Ord a => (b -> v -> b) -> b -> a -> RelGraph a v -> b
 foldlFrom' f res x =
   foldl' f res . fromMaybe M.empty . M.lookup x . unRelGraph
 
-prop_relCorrectness :: Seq Integer -> Bool
-prop_relCorrectness seq = all cond $ allCombinations g
-  where g = insertSeq (\x y -> let r = x * y in (r, negate r)) emptyRel seq
+prop_relCorrectness :: Map String Integer -> Bool
+prop_relCorrectness map = all cond $ allCombinations g
+  where g = insertMapKey (\x y -> let r = x * y in (r, negate r)) emptyRel map
         cond (x, y) = lookupRel x y g == fmap negate (lookupRel y x g)
 
 prop_insertLookupNoOv :: (Ord a, Eq v) => a -> a -> v ->  Bool
