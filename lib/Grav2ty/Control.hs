@@ -66,6 +66,11 @@ processObject old rels hook id obj =
          setObject (Just id) newObj
          hook newObj
 
+-- | If called advances the simulation by one 'Tick' relying on the 'Grav2tyState'.
+--
+--   It also calls the provided hook-Action once for every remaining 'Object'. This
+--   action can be used to update the '_graphics' state @g@ or modify the behaviour
+--   of @processTick@ altogether.
 processTick :: (Monad m, RealFloat a)
             => (Object a -> Grav2ty a g m ())
             -> Grav2ty a g m ()

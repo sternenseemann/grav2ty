@@ -31,6 +31,7 @@ import Linear.Metric (norm, distance)
 import Linear.V2
 import Linear.Vector
 
+-- | @translateHitbox (V2 x y)@ translates a 'Hitbox' by (x, y) in a 2d plane.
 translateHitbox :: Num a => V2 a -> Hitbox a -> Hitbox a
 translateHitbox t (HLine a b) = HLine (a + t) (b + t)
 translateHitbox t (HCircle c r) = HCircle (c + t) r
@@ -39,13 +40,17 @@ translateHitbox t (HCombined hs) = HCombined . map (translateHitbox t) $ hs
 complexV2 :: Iso' (Complex a) (V2 a)
 complexV2 = iso (\(x :+ y) -> V2 x y) (\(V2 x y) -> x :+ y)
 
--- | Rotate a point by an radial angle around @V2 0 0@
+-- | Rotate a point by an radial angle around @V2 0 0@ using 'Complex' multiplication.
+--   When using this rotation make sure to rotate before translating.
 rotateV2 :: RealFloat a => a -> V2 a -> V2 a
 rotateV2 angle = (^. complexV2) . (* rotator) . (^. from complexV2)
   where rotator = cos angle :+ sin angle
 
 -- TODO address inaccuracies of 'Float' and 'Double'?
--- | Rotate a 'Hitbox' by a radial angle.
+-- | @rotateHitbox@ rotates a 'Hitbox' by the given angle
+--   which must be radial. As it uses 'Complex' multiplication
+--   the center of the rotation is always @V2 0 0@, so make
+--   sure to rotate before translating a 'Hitbox'.
 rotateHitbox :: RealFloat a => a -> Hitbox a -> Hitbox a
 rotateHitbox angle box =
   case box of
@@ -53,7 +58,7 @@ rotateHitbox angle box =
     HCircle c r -> HCircle (rotateV2 angle c) r
     HCombined l -> HCombined . map (rotateHitbox angle) $ l
 
--- | Returns the 'Hitbox' for an 'Object', but rotated and translated
+-- | Returns the 'Hitbox' for an 'Object' — rotated and translated
 --   to the location it is *actually* at.
 realHitbox :: RealFloat a => Object a -> Hitbox a
 realHitbox obj = translateHitbox (objectLoc obj) . rotateHitbox (objectRot obj)
@@ -70,6 +75,7 @@ cramer2 coeff res = if detA == 0
         a1 = set (column _x) res coeff
         a2 = set (column _y) res coeff
 
+-- | Wether a value is between two other values.
 inRange :: Ord a => (a, a) -> a -> Bool
 inRange (l, u) x = x >= l && x <= u
 
@@ -125,14 +131,19 @@ collision (HLine a1 b1) (HLine a2 b2) =
 collision (HCombined as) b = any (collision b) as
 collision a b@(HCombined _) = collision b a
 
+-- | Wether two given 'Object's collide.
 objectCollision :: RealFloat a => Object a -> Object a -> Bool
 objectCollision a b = a /= b &&
   ((objectLoc a == objectLoc b)
     || collision (realHitbox a) (realHitbox b))
 
+-- | Wether two 'Object's have a certain distance. Used to
+--   prevent extreme spikes in gravitational force while simulating
+--   two objects that are close together.
 separated :: (Floating a, Ord a) => Object a -> Object a -> Bool
 separated a b = distance (objectLoc a) (objectLoc b) > 3
 
+-- | Directional Gravitational Force between two Objects as two-dimensional vector.
 gravitationForce :: Floating a => Object a -> Object a -> V2 a
 gravitationForce a b = (gravityConst *
   ((objectMass a * objectMass b) / (absDistance ** 2)))
@@ -141,6 +152,7 @@ gravitationForce a b = (gravityConst *
         distance = objectLoc b - objectLoc a
         absDistance = norm distance
 
+-- | The sum of gravitational force the 'World' imposes on an 'Object'.
 gravitationForces :: (Ord a, Floating a) => World a -> Object a -> V2 a
 gravitationForces world obj = foldl' calcSum (pure 0) world
   where calcSum force x = if separated obj x
@@ -154,8 +166,13 @@ data ObjRel a = ObjRel
 
 makeLenses 'ObjRel
 
+-- | The Object Relation Graph is used to store collisions
+--   and the forces between 'Object's. This prevents that
+--   these values are computed more than once and allows
+--   to reuse computations for the inverse relation.
 type ObjRelGraph a = RelGraph Id (ObjRel a)
 
+-- | Calculates all 'ObjRel's for a 'World'.
 objectRelGraph :: (RealFloat a, Ord a) => World a -> ObjRelGraph a
 objectRelGraph = insertMapKey rel emptyRel
   where rel a b = let res = ObjRel (objectCollision a b) (gravity a b)
@@ -164,6 +181,10 @@ objectRelGraph = insertMapKey rel emptyRel
                          then gravitationForce a b
                          else pure 0
 
+-- | @updateObject timeStep gravitionForce@ calculates the state of
+--   an 'Object' after a certain @timeStep@ of being exposed to
+--   a certain @gravitationForce@. It also factors in the current
+--   acceleration and speed of the 'Object'.
 updateObject :: Fractional a =>  a -> V2 a -> Object a -> Object a
 updateObject _ _ obj@Static {} = obj
 updateObject timeStep force obj@Dynamic {} = obj
