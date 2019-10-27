@@ -7,7 +7,6 @@ import Grav2ty.Util.RelGraph
 
 import Control.Lens
 import Control.Monad (when, unless)
-import Data.Foldable (traverse_)
 import Data.Map (Map (..))
 import Data.Maybe
 import Linear.V2
@@ -24,27 +23,33 @@ projectile (pos,speed) tick ship =
 getForce :: (Ord a, Num a) =>  ObjRelGraph a -> Id -> V2 a
 getForce objRel id = foldlFrom' (\f r -> f + _relForce r) (V2 0 0) id objRel
 
-applyControls :: (Monad m, RealFloat a)
-              => Id -> Object a -> Grav2ty a g m (Maybe (Object a))
-applyControls _ obj@Static {} = pure $ Just obj
-applyControls id obj@Dynamic {} = use tick >>= \currentTick ->
-  if fromMaybe False ((< currentTick) <$> objectLife obj)
-     then delObject id >> pure Nothing
-     else do
-       let mod = objectMod obj
-       modOfObj <- use (inputs.at mod)
-       if mod == NoMod || modOfObj == Nothing
-          then pure $ Just obj
-          else do
-            let Just (Modification rot acc fire) = modOfObj
-            -- inputs.at mod .= Nothing (doesn't work with current gloss impl,
-            --                           also not necessary…)
+modifyObject :: (Monad m, RealFloat a)
+             => Id -> Object a -> Grav2ty a g m (Object a)
+modifyObject id obj@Static {} = pure obj
+modifyObject id obj@Dynamic {} = use tick >>= \currentTick ->
+  let mod = objectMod obj in use (inputs.at mod) >>= \modOfObj ->
+    if mod == NoMod || modOfObj == Nothing
+       then pure obj
+       else do
+         let Just (Modification rot acc fire) = modOfObj
+         -- inputs.at mod .= Nothing (doesn't work with current gloss impl,
+         --                           also prob not necessary…)
 
-            -- TODO: lenses for Object
-            let newObj = obj { objectRot = rot, objectAcc = angle rot ^* acc }
-            when (currentTick == fire && isJust (objectCannon obj)) $
-              addObject (projectile (fromJust (objectCannon obj)) currentTick newObj)
-            pure $ Just newObj
+         -- TODO: lenses for Object
+         let newObj = obj { objectRot = rot, objectAcc = angle rot ^* acc }
+         when (currentTick == fire && isJust (objectCannon obj)) $
+           addObject (projectile (fromJust (objectCannon obj)) currentTick newObj)
+         pure newObj
+
+deletionNecessary :: Monad m
+                  => ObjRelGraph a -> Id -> Object a
+                  -> Grav2ty a g m Bool
+deletionNecessary rels id obj = do
+  currentTick <- use tick
+  pure $
+    isDynamic obj &&                                           -- only dynamic objs are deleted
+    (fromMaybe False ((< currentTick) <$> objectLife obj) ||   -- life span expired?
+    (anyFrom _relColl id rels == Just True))                   -- collision?
 
 processObject :: (Monad m, RealFloat a)
               => World a -> ObjRelGraph a
@@ -52,14 +57,14 @@ processObject :: (Monad m, RealFloat a)
               -> Id -> Object a
               -> Grav2ty a g m ()
 processObject old rels hook id obj =
-  if isDynamic obj && (anyFrom _relColl id rels == Just True)
-     -- delete any dynamic object that collided with another object
-     then delObject id
-     else do
-       timeStep <- use timePerTick
-       newObj <- fmap (updateObject timeStep (getForce rels id)) <$> applyControls id obj
-       traverse (setObject (Just id)) newObj
-       traverse_ hook newObj
+  deletionNecessary rels id obj >>= \del ->
+    if del
+       then delObject id
+       else do
+         timeStep <- use timePerTick
+         newObj <- updateObject timeStep (getForce rels id) <$> modifyObject id obj
+         setObject (Just id) newObj
+         hook newObj
 
 processTick :: (Monad m, RealFloat a)
             => (Object a -> Grav2ty a g m ())
