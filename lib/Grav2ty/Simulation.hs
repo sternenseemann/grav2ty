@@ -41,7 +41,7 @@ complexV2 = iso (\(x :+ y) -> V2 x y) (\(V2 x y) -> x :+ y)
 
 -- | Rotate a point by an radial angle around @V2 0 0@
 rotateV2 :: RealFloat a => a -> V2 a -> V2 a
-rotateV2 angle p = (^. complexV2) . (* rotator) . (^. from complexV2) $ p
+rotateV2 angle = (^. complexV2) . (* rotator) . (^. from complexV2)
   where rotator = cos angle :+ sin angle
 
 -- TODO address inaccuracies of 'Float' and 'Double'?
@@ -100,9 +100,8 @@ collision (HLine start end) (HCircle (V2 cx cy) r) =
       b = 2 * dirX * ax + 2 * dirY * ay - 2 * cx * dirX - 2 * cy * dirY
       c = ax ^ 2 + ay ^ 2 - 2 * cx * ax - 2 * cy * ay + cx ^ 2 + cy ^ 2 - r ^ 2
       discriminant = b ** 2 - 4 * a * c
-      solution m = (-b `m` (sqrt discriminant)) / (2 * a)
-      solutions = solution (+) :
-        (if discriminant > 0 then [solution (-)] else [])
+      solution m = (-b `m` sqrt discriminant) / (2 * a)
+      solutions = solution (+) : [solution (-) | discriminant > 0]
    in discriminant >= 0 -- there is a possible intersection
    && a /= 0 -- HLine is proper line (i.e. has distinct start and end points)
    && any (inRange (0, 1)) solutions

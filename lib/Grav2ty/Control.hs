@@ -28,7 +28,7 @@ modifyObject :: (Monad m, RealFloat a)
 modifyObject id obj@Static {} = pure obj
 modifyObject id obj@Dynamic {} = use tick >>= \currentTick ->
   let mod = objectMod obj in use (inputs.at mod) >>= \modOfObj ->
-    if mod == NoMod || modOfObj == Nothing
+    if mod == NoMod || isNothing modOfObj
        then pure obj
        else do
          let Just (Modification rot acc fire) = modOfObj
@@ -47,9 +47,9 @@ deletionNecessary :: Monad m
 deletionNecessary rels id obj = do
   currentTick <- use tick
   pure $
-    isDynamic obj &&                                           -- only dynamic objs are deleted
-    (fromMaybe False ((< currentTick) <$> objectLife obj) ||   -- life span expired?
-    (anyFrom _relColl id rels == Just True))                   -- collision?
+    isDynamic obj &&                                 -- only dynamic objs are deleted
+    (maybe False (< currentTick) (objectLife obj) || -- life span expired?
+    (anyFrom _relColl id rels == Just True))         -- collision?
 
 processObject :: (Monad m, RealFloat a)
               => World a -> ObjRelGraph a

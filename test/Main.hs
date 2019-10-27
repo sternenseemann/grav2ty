@@ -14,7 +14,7 @@ instance (Ord a, Arbitrary a, Arbitrary v) => Arbitrary (RelGraph a v) where
   arbitrary = do
     let g = emptyRel
     c <- arbitrary `suchThat` (>= 0)
-    times c g $ (\g -> do
+    times c g (\g -> do
       x <- arbitrary
       y <- arbitrary
       v <- arbitrary

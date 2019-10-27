@@ -87,7 +87,7 @@ insertMapKey f g map = M.foldlWithKey' ins g map
 
 -- | Lookup the Relation between two given Vertices.
 lookupRel :: Ord a => a -> a -> RelGraph a v -> Maybe v
-lookupRel x y = (>>= (M.lookup y)) . M.lookup x . unRelGraph
+lookupRel x y = (>>= M.lookup y) . M.lookup x . unRelGraph
 
 -- | Wether any of the Edges from a given Vertex satisfy
 --   the given condition.
@@ -100,7 +100,7 @@ foldlFrom' f res x =
   foldl' f res . fromMaybe M.empty . M.lookup x . unRelGraph
 
 prop_relCorrectness :: Seq Integer -> Bool
-prop_relCorrectness seq = and . map cond $ allCombinations g
+prop_relCorrectness seq = all cond $ allCombinations g
   where g = insertSeq (\x y -> let r = x * y in (r, negate r)) emptyRel seq
         cond (x, y) = lookupRel x y g == fmap negate (lookupRel y x g)
 

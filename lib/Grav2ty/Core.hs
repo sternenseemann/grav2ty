@@ -104,7 +104,7 @@ shipHitbox = HCombined
 
 -- | Generates a 'Hitbox' with a given radius centered around (0,0).
 centeredCircle :: Num a => a -> Hitbox a
-centeredCircle r = HCircle (V2 0 0) r
+centeredCircle = HCircle (V2 0 0)
 
 data Modification a
   = Modification
@@ -135,7 +135,7 @@ makeLenses ''Grav2tyState
 type Grav2ty p g m a = StateT (Grav2tyState p g) m a
 
 addObject :: Monad m => Object a -> Grav2ty a g m ()
-addObject obj = setObject Nothing obj
+addObject = setObject Nothing
 
 setObject :: Monad m => Maybe Id -> Object a -> Grav2ty a g m ()
 setObject id obj = do
@@ -144,7 +144,7 @@ setObject id obj = do
           Nothing -> do
             highestId += 1
             use highestId
-  world %= (M.insert id obj)
+  world %= M.insert id obj
 
 getObject :: Monad m => Id -> Grav2ty a g m (Maybe (Object a))
 getObject id = use (world.at id)

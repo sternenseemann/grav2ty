@@ -46,10 +46,10 @@ renderHitbox box =  Color white $
     HCombined boxes -> Pictures $ map renderHitbox boxes
 
 renderObject :: Object Float -> Picture
-renderObject obj = renderHitbox . realHitbox $ obj
+renderObject = renderHitbox . realHitbox
 
 renderUi :: (PrintfArg a, Num a) => Grav2tyState a GlossState -> Picture
-renderUi state = (uncurry translate) (homBimap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
+renderUi state = uncurry translate (homBimap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
   . (^. graphics.glossViewPort) $ state)
   . scale 0.2 0.2 . Color green . Text $ uiText
   where uiText = printf "Acceleration: %.0f Time/Tick: %f Tick: %d" acc tpt t
@@ -84,7 +84,7 @@ eventHandler :: (Show a, Ord a, Real a, Floating a) => Event
 eventHandler (EventKey key Down _ _) state = action state
   where updateLocalMod :: Lens' (Modification a) b -> (b -> b)
                        -> Grav2tyState a GlossState -> Grav2tyState a GlossState
-        updateLocalMod l f = over (inputs.at LocalMod ._Just.l) f
+        updateLocalMod l = over (inputs.at LocalMod ._Just.l)
         accStep = 1
         rotStep = pi / 10
         scaleStep = 1.1
@@ -95,7 +95,7 @@ eventHandler (EventKey key Down _ _) state = action state
             SpecialKey KeyUp -> updateLocalMod modAcc (+ accStep)
             SpecialKey KeyDown -> updateLocalMod modAcc (boundSub 0 accStep)
             SpecialKey KeyLeft -> updateLocalMod modRot (mod2pi . (+ rotStep))
-            SpecialKey KeyRight -> updateLocalMod modRot (mod2pi . (subtract rotStep))
+            SpecialKey KeyRight -> updateLocalMod modRot (mod2pi . subtract rotStep)
             SpecialKey KeySpace -> updateLocalMod modFire (const $ state^.tick + 10)
             Char 'c' -> over (graphics.glossCenterView) not
             Char '+' -> over (graphics.glossViewPortScale) (* scaleStep)
