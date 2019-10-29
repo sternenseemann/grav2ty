@@ -48,9 +48,9 @@ type Tick = Integer
 type World a = Map Id (Object a)
 
 data Modifier
-  = NoMod            -- ^ Not modified, purely physics based.
-  | LocalMod         -- ^ Object is modified by local client / player.
-  | External Integer -- ^ Object is modified by an external source / other players.
+  = NoMod  -- ^ Not modified, purely physics based.
+  | Mod Id -- ^ Object is modified by the modifier with a certain 'Id',
+           --   which might be a local or remote player.
   deriving(Eq, Ord, Show)
 
 -- | @Just (<cannon position>, <cannon direction>)@ describes origin and
