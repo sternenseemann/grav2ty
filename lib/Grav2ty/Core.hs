@@ -164,13 +164,13 @@ makeLenses ''Grav2tyState
 type Grav2ty p g m a = StateT (Grav2tyState p g) m a
 
 -- | Shortcut for @'setObject' Nothing@.
-addObject :: Monad m => Object a -> Grav2ty a g m ()
+addObject :: Monad m => Object a -> Grav2ty a g m Id
 addObject = setObject Nothing
 
 -- | setObject overwrites or sets the 'Object' at the given 'Id'.
 --   If no 'Id' is given it picks a new 'Id' using '_highestId'
 --   that is guaranteed to be unused (if nothing messed with the 'World').
-setObject :: Monad m => Maybe Id -> Object a -> Grav2ty a g m ()
+setObject :: Monad m => Maybe Id -> Object a -> Grav2ty a g m Id
 setObject id obj = do
   id <- case id of
           Just id -> pure id
@@ -178,6 +178,7 @@ setObject id obj = do
             highestId += 1
             use highestId
   world %= M.insert id obj
+  pure id
 
 -- | Returns the 'Object' at 'Id'.
 getObject :: Monad m => Id -> Grav2ty a g m (Maybe (Object a))

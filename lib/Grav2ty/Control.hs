@@ -24,22 +24,23 @@ getForce :: (Ord a, Num a) =>  ObjRelGraph a -> Id -> V2 a
 getForce objRel id = foldlFrom' (\f r -> f + _relForce r) (V2 0 0) id objRel
 
 modifyObject :: (Monad m, RealFloat a)
-             => Id -> Object a -> Grav2ty a g m (Object a)
-modifyObject id obj@Static {} = pure obj
+             => Id -> Object a -> Grav2ty a g m (Object a, World a)
+modifyObject id obj@Static {} = pure (obj, M.empty)
 modifyObject id obj@Dynamic {} = use tick >>= \currentTick ->
   let mod = objectMod obj in use (inputs.at mod) >>= \modOfObj ->
     if mod == NoMod || isNothing modOfObj
-       then pure obj
+       then pure (obj, M.empty)
        else do
          let Just (Modification rot acc fire) = modOfObj
-         -- inputs.at mod .= Nothing (doesn't work with current gloss impl,
-         --                           also prob not necessary…)
+         -- inputs.at mod .= Nothing (not possible if inputs is
+         --                           used as state)
 
          -- TODO: lenses for Object
          let newObj = obj { objectRot = rot, objectAcc = angle rot ^* acc }
-         when (currentTick == fire && isJust (objectCannon obj)) $
-           addObject (projectile (fromJust (objectCannon obj)) currentTick newObj)
-         pure newObj
+         if not (currentTick == fire && isJust (objectCannon obj))
+            then pure (newObj, M.empty)
+            else let p = projectile (fromJust (objectCannon obj)) currentTick newObj
+                  in addObject p >>= \id -> pure (newObj, M.singleton id p)
 
 deletionNecessary :: Monad m
                   => ObjRelGraph a -> Id -> Object a
@@ -55,30 +56,40 @@ processObject :: (Monad m, RealFloat a)
               => World a -> ObjRelGraph a
               -> (Object a -> Grav2ty a g m ())
               -> Id -> Object a
-              -> Grav2ty a g m ()
-processObject old rels hook id obj =
-  deletionNecessary rels id obj >>= \del ->
+              -> Grav2ty a g m (World a)
+processObject old rels hook ident obj =
+  deletionNecessary rels ident obj >>= \del ->
     if del
-       then delObject id
+       then delObject ident >> pure M.empty
        else do
          timeStep <- use timePerTick
-         newObj <- updateObject timeStep (getForce rels id) <$> modifyObject id obj
-         setObject (Just id) newObj
+         (newObj, createdObjs) <- bimap (updateObject timeStep (getForce rels ident)) id <$>
+                                    modifyObject ident obj
+         setObject (Just ident) newObj
          hook newObj
+         pure $ M.insert ident newObj createdObjs
 
 -- | If called advances the simulation by one 'Tick' relying on the 'Grav2tyState'.
 --
 --   It also calls the provided hook-Action once for every remaining 'Object'. This
 --   action can be used to update the '_graphics' state @g@ or modify the behaviour
 --   of @processTick@ altogether.
+--
+--   It returns all 'Object's that were changed during the 'Tick' as a 'World'
+--   which will only contain changed 'Dynamic' 'Object's.
 processTick :: (Monad m, RealFloat a)
             => (Object a -> Grav2ty a g m ())
-            -> Grav2ty a g m ()
+            -> Grav2ty a g m (World a)
 processTick objHook = do
   oldWorld <- use world
   let objRel = objectRelGraph oldWorld
 
-  use world >>= M.foldlWithKey' (\action id obj ->
-    action >> processObject oldWorld objRel objHook id obj) (pure ())
+  updatedObjs <- use world >>= M.foldlWithKey' (\action id obj ->
+    action >>= \updated -> fmap (M.union updated) (processObject oldWorld objRel objHook id obj)) (pure M.empty)
 
   tick %= (+1)
+
+  pure updatedObjs
+
+-- TODO Map could be replaced by Seq here because we don't need to
+-- lookup a values in it.
