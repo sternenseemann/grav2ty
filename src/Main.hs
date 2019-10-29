@@ -9,7 +9,7 @@ import Grav2ty.Control
 
 import Control.Lens
 import Linear.V2
-import Control.Monad.Trans.State.Strict
+import Control.Monad.Trans.State
 import Data.Fixed (mod')
 import Data.Foldable
 import Data.Maybe

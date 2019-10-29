@@ -31,7 +31,7 @@ module Grav2ty.Core
   ) where
 
 import Control.Lens
-import Control.Monad.Trans.State.Strict
+import Control.Monad.Trans.State
 import Data.Map.Strict (Map (..))
 import qualified Data.Map.Strict as M
 import Linear.V2
