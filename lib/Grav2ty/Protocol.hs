@@ -15,6 +15,7 @@ import Data.Char
 import Data.Flat
 import Data.Flat.Instances
 import Data.Int
+import Data.Maybe (fromJust, isNothing)
 import Data.Word
 import Linear.V2
 
@@ -45,6 +46,7 @@ data Message a
   | NewWorld Tick (World a)
   | NewObject Tick Id (Object a)
   | UpdateMod (ModMap a)
+  | TicksPerSecond Tick
   deriving (Show, Eq, Ord, Generic, Flat)
 
 toMaybe :: Bool -> a -> Maybe a
@@ -62,6 +64,7 @@ instance Flat a => ToPacket (Message a) where
   toPacket (NewWorld tick world) = Packet 3 $ flat (tick, world)
   toPacket (NewObject tick id obj) = Packet 4 $ flat (tick, id, obj)
   toPacket (UpdateMod modmap) = Packet 5 (flat modmap)
+  toPacket (TicksPerSecond t) = Packet 6 (flat t)
   fromPacket (Packet 0 v) = toMaybe (BS.length v == 1) (ProtocolVersion $ BS.head v)
   fromPacket (Packet 1 e) = Error <$> rightToMaybe (unflat e)
   fromPacket (Packet 2 m) = AssignMods <$> rightToMaybe (unflat m)
@@ -72,6 +75,7 @@ instance Flat a => ToPacket (Message a) where
                               Left _ -> Nothing
                               Right (tick, id, obj) -> Just $ NewObject tick id obj
   fromPacket (Packet 5 m) = UpdateMod <$> rightToMaybe (unflat m)
+  fromPacket (Packet 6 t) = TicksPerSecond <$> rightToMaybe (unflat t)
   fromPacket (Packet _ _) = Nothing
 
 bytes :: Int64 -> [Word8]
@@ -101,3 +105,13 @@ packetParser = do
   t <- anyWord8
   length <- fromIntegral . unbytes . BS.unpack <$> take 8 -- TODO get rid of unpack
   Packet t <$> take length
+
+renderMessage :: Flat a => Message a -> ByteString
+renderMessage = renderPacket . toPacket
+
+parseMessage :: Flat a => ByteString -> Result (Message a)
+parseMessage = parse messageParser
+
+messageParser :: Flat a => Parser (Message a)
+messageParser = packetParser >>=
+  maybe (fail "Packet is no valid message") pure . fromPacket
