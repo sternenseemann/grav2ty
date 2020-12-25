@@ -185,7 +185,7 @@ objectRelGraph = insertMapKey rel emptyRel
 --   an 'Object' after a certain @timeStep@ of being exposed to
 --   a certain @gravitationForce@. It also factors in the current
 --   acceleration and speed of the 'Object'.
-updateObject :: Fractional a =>  a -> V2 a -> Object a -> Object a
+updateObject :: Fractional a => a -> V2 a -> Object a -> Object a
 updateObject _ _ obj@Static {} = obj
 updateObject timeStep force obj@Dynamic {} = obj
     { objectLoc   = objectLoc obj + (objectSpeed obj ^* timeStep)
