@@ -3,7 +3,7 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 module Grav2ty.Util.Serialization where
 
-import Data.Flat
+import Flat
 import GHC.Generics
 import Grav2ty.Core (Hitbox (..), Object (..), Modifier (..), Modification (..))
 import Linear.V2 (V2 (..))

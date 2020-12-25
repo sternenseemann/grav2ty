@@ -12,8 +12,7 @@ import Data.Bits
 import Data.ByteString (ByteString (..))
 import qualified Data.ByteString as BS
 import Data.Char
-import Data.Flat
-import Data.Flat.Instances
+import Flat
 import Data.Int
 import Data.Maybe (fromJust, isNothing)
 import Data.Word
