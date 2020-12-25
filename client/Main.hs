@@ -51,9 +51,9 @@ renderObject = renderHitbox . realHitbox
 
 renderUi :: (PrintfArg a, Num a) => Grav2tyState a GlossState -> Picture
 renderUi state = uncurry translate (homBimap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
-  . (^. graphics.glossViewPort) $ state)
+  . (^. customState.glossViewPort) $ state)
   . scale 0.2 0.2 . Color green . Text $ uiText
-  where uiText = printf "Acceleration: %.0f Time/Tick: %f Tick: %d" acc tpt t
+  where uiText = printf "Acceleration: %.0f Time/Tick: %d Tick: %d" acc tpt t
         acc = fromMaybe 0 $ state^?inputs.at localMod ._Just.modAcc
         t = state^.tick
         tpt = state^.timePerTick
@@ -61,13 +61,13 @@ renderUi state = uncurry translate (homBimap ((+ 50) . (* (-1)) . (/ 2) . fromIn
 renderGame :: Grav2tyState Float GlossState -> Picture
 renderGame state = Pictures [ renderUi  state, applyViewPort objs ]
   where objs = Pictures . foldl' (\l x -> renderObject x : l) [] $ state^.world
-        applyViewPort = if state^.graphics.glossCenterView
+        applyViewPort = if state^.customState.glossCenterView
                            then applyViewPortToPicture viewport
                            else id
         viewport = ViewPort
-          (homBimap negate $ state^.graphics.glossViewPortCenter)
+          (homBimap negate $ state^.customState.glossViewPortCenter)
           0
-          (state^.graphics.glossViewPortScale)
+          (state^.customState.glossViewPortScale)
 
 boundSub :: (Ord a, Num a) => a -> a -> a -> a
 boundSub min a x = if res < min then min else res
@@ -95,24 +95,24 @@ eventHandler (EventKey key Down _ _) state = action state
             SpecialKey KeyLeft -> updateLocalMod modRot (mod2pi . (+ rotStep))
             SpecialKey KeyRight -> updateLocalMod modRot (mod2pi . subtract rotStep)
             SpecialKey KeySpace -> updateLocalMod modFire (const $ state^.tick + 10)
-            Char 'c' -> over (graphics.glossCenterView) not
-            Char '+' -> over (graphics.glossViewPortScale) (* scaleStep)
-            Char '-' -> over (graphics.glossViewPortScale) (/ scaleStep)
+            Char 'c' -> over (customState.glossCenterView) not
+            Char '+' -> over (customState.glossViewPortScale) (* scaleStep)
+            Char '-' -> over (customState.glossViewPortScale) (/ scaleStep)
             _ -> id
-eventHandler (EventResize vp) state = set (graphics.glossViewPort) vp state
+eventHandler (EventResize vp) state = set (customState.glossViewPort) vp state
 eventHandler _ s = s
 
 updateWorld :: Float -> Grav2tyState Float GlossState -> Grav2tyState Float GlossState
-updateWorld ts state = snd . flip runState state $ timePerTick .= ts >> processTick hook
+updateWorld ts state = snd . flip runState state $ timePerTick .= round (ts * (10 ** 6)) >> processTick hook
   where hook obj@Dynamic { } = when (objectMod obj == localMod) $
-          graphics.glossViewPortCenter .= (vectorToPoint . objectLoc $ obj)
+          customState.glossViewPortCenter .= (vectorToPoint . objectLoc $ obj)
         hook _ = pure ()
 
 localMod :: Modifier
 localMod = Mod 0
 
 initialWorld :: Fractional a => Grav2tyState a GlossState
-initialWorld = snd . flip runState (Grav2tyState 0 (1/300)
+initialWorld = snd . flip runState (Grav2tyState 0 (round $ 1/500 * (10 ** 6))
   (M.fromList [(localMod, zeroModification)])
   (GlossState (800, 800) (0, 0) 1 True)
   mempty 0) $ do
@@ -122,11 +122,13 @@ initialWorld = snd . flip runState (Grav2tyState 0 (1/300)
 --  addObject $ Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 250)
   where moonMass = 8e14
 
+fps = 500
+
 main :: IO ()
 main = play
-  (InWindow "grav2ty" (initialWorld^.graphics.glossViewPort) (0,0))
+  (InWindow "grav2ty" (initialWorld^.customState.glossViewPort) (0,0))
   black
-  300
+  fps
   initialWorld
   renderGame
   eventHandler
