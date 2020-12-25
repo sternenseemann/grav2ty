@@ -1,20 +1,39 @@
 {-# LANGUAGE DeriveGeneric  #-}
 {-# LANGUAGE DeriveAnyClass #-}
-module Grav2ty.Protocol where
+module Grav2ty.Protocol
+  ( -- * Packets
+    Packet (..)
+  , ToPacket (..)
+  , renderPacket
+  , packetParser
+    -- * Protocol
+  , protocolVersion
+  , Message (..)
+  , ErrorType (..)
+  , renderMessage
+  , messageParser
+  , Flat (..)
+  -- * Protocol Logic
+  , serverUpdateState
+  , clientUpdateState
+  ) where
 
 import Prelude hiding (take)
 
 import Grav2ty.Core
 import Grav2ty.Util.Serialization
 
+import Control.Lens ((%=), (.=), use)
+import Control.Monad (when)
 import Data.Attoparsec.ByteString
 import Data.Bits
 import Data.ByteString (ByteString (..))
 import qualified Data.ByteString as BS
 import Data.Char
-import Data.Flat
-import Data.Flat.Instances
+import Flat
+import Flat.Instances
 import Data.Int
+import qualified Data.Map as M
 import Data.Maybe (fromJust, isNothing)
 import Data.Word
 import Linear.V2
@@ -42,11 +61,11 @@ data ErrorType
 data Message a
   = ProtocolVersion Word8
   | Error ErrorType
-  | AssignMods [Id]
+  | AssignMods [Modifier]
   | NewWorld Tick (World a)
   | NewObject Tick Id (Object a)
   | UpdateMod (ModMap a)
-  | TicksPerSecond Tick
+  | TimePerTick Int
   deriving (Show, Eq, Ord, Generic, Flat)
 
 toMaybe :: Bool -> a -> Maybe a
@@ -60,14 +79,14 @@ rightToMaybe (Right x) = Just x
 instance Flat a => ToPacket (Message a) where
   toPacket (ProtocolVersion v) = Packet 0 (BS.singleton v)
   toPacket (Error e) = Packet 1 (flat e)
-  toPacket (AssignMods ids) = Packet 2 (flat ids)
+  toPacket (AssignMods ids) = Packet 2 . flat . map (\(Mod i) -> i) . filter doesModify $ ids
   toPacket (NewWorld tick world) = Packet 3 $ flat (tick, world)
   toPacket (NewObject tick id obj) = Packet 4 $ flat (tick, id, obj)
   toPacket (UpdateMod modmap) = Packet 5 (flat modmap)
-  toPacket (TicksPerSecond t) = Packet 6 (flat t)
+  toPacket (TimePerTick t) = Packet 6 (flat t)
   fromPacket (Packet 0 v) = toMaybe (BS.length v == 1) (ProtocolVersion $ BS.head v)
   fromPacket (Packet 1 e) = Error <$> rightToMaybe (unflat e)
-  fromPacket (Packet 2 m) = AssignMods <$> rightToMaybe (unflat m)
+  fromPacket (Packet 2 m) = AssignMods . map Mod <$> rightToMaybe (unflat m)
   fromPacket (Packet 3 w) = case unflat w of
                               Left _ -> Nothing
                               Right (tick, world) -> Just $ NewWorld tick world
@@ -75,7 +94,7 @@ instance Flat a => ToPacket (Message a) where
                               Left _ -> Nothing
                               Right (tick, id, obj) -> Just $ NewObject tick id obj
   fromPacket (Packet 5 m) = UpdateMod <$> rightToMaybe (unflat m)
-  fromPacket (Packet 6 t) = TicksPerSecond <$> rightToMaybe (unflat t)
+  fromPacket (Packet 6 t) = TimePerTick <$> rightToMaybe (unflat t)
   fromPacket (Packet _ _) = Nothing
 
 bytes :: Int64 -> [Word8]
@@ -97,9 +116,6 @@ renderPacket (Packet t content) = BS.pack (t : bytes len) `BS.append` content
   where len :: Int64
         len = fromIntegral $ BS.length content
 
-parsePacket :: ByteString -> Result Packet
-parsePacket = parse packetParser
-
 packetParser :: Parser Packet
 packetParser = do
   t <- anyWord8
@@ -109,9 +125,32 @@ packetParser = do
 renderMessage :: Flat a => Message a -> ByteString
 renderMessage = renderPacket . toPacket
 
-parseMessage :: Flat a => ByteString -> Result (Message a)
-parseMessage = parse messageParser
-
 messageParser :: Flat a => Parser (Message a)
 messageParser = packetParser >>=
   maybe (fail "Packet is no valid message") pure . fromPacket
+
+-- | Process messages from a client connected via an already established connection.
+--   Updates the State and ensures that the client won't set anything it shouldn't
+--   be allowed to (like 'Modifier's it isn't assigned)
+serverUpdateState :: Monad m => [Modifier] -> Message p -> Grav2ty p g m ()
+serverUpdateState _ (ProtocolVersion _) = pure () -- protocol version does not change
+serverUpdateState _ (AssignMods _) = pure ()      -- can only be done by the server
+serverUpdateState _ (NewWorld _ _) = pure ()      -- can only be sent by the server
+serverUpdateState _ (NewObject _ _ _) = pure ()   -- can only be sent by the server
+serverUpdateState _ (TimePerTick _) = pure ()     -- only updated by the server
+serverUpdateState _ (Error _) = pure ()           -- TODO Error Handling, Client Errors
+serverUpdateState mods (UpdateMod modmap) = inputs %= insertMods (`elem` mods) modmap
+
+clientUpdateState :: Monad m => [Modifier] -> Message p -> Grav2ty p g m ()
+clientUpdateState _ (ProtocolVersion _) = pure () -- protocol version does not change
+clientUpdateState _ (Error _) = pure ()           -- TODO error handling here?
+clientUpdateState _ (TimePerTick t) = timePerTick .= t
+clientUpdateState mods (UpdateMod modmap) = inputs %= insertMods (not . (`elem` mods)) modmap
+clientUpdateState _ (NewWorld t w) = tick .= t >> world .= w
+clientUpdateState _ (NewObject t i o) = tick .= t >> (() <$ setObject (Just i) o)
+
+insertMods :: (Modifier -> Bool) -> ModMap a -> ModMap a -> ModMap a
+insertMods test from into = M.foldlWithKey' (\into mod content ->
+  if test mod
+     then M.insert mod content into
+     else into) into from
