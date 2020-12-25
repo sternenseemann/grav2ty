@@ -26,7 +26,9 @@ the most realistic asteroids-like game in existence.
 - [x] projectiles
   - [ ] Limit firerate
   - [x] make projectiles self-destruct
+  - [ ] reduce redundancy in projectile (cannon + object)
 - [ ] performance improvements
+  - [ ] simplify RelGraph (ordered tuples as keys)
   - [ ] don't calculate gravity to every little object
   - [ ] don't do collision detection at a safe distance
 - [ ] multi player support
