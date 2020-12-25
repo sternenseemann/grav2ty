@@ -9,6 +9,7 @@ module Grav2ty.Core
   , isDynamic
   , Cannon (..)
   , Modifier (..)
+  , doesModify
   -- *** Hitboxes
   , Hitbox (..)
   , shipHitbox
@@ -22,7 +23,7 @@ module Grav2ty.Core
   , Grav2ty (..)
   -- ** State
   , Grav2tyState (..)
-  , tick, timePerTick, inputs, graphics, world, highestId
+  , tick, timePerTick, inputs, customState, world, highestId
   -- ** Operations
   , setObject
   , getObject
@@ -52,6 +53,10 @@ data Modifier
   | Mod Id -- ^ Object is modified by the modifier with a certain 'Id',
            --   which might be a local or remote player.
   deriving(Eq, Ord, Show)
+
+doesModify :: Modifier -> Bool
+doesModify NoMod = False
+doesModify _     = True
 
 -- | @Just (<cannon position>, <cannon direction>)@ describes origin and
 --   trajectory of projectiles of this object. Note that both position and
@@ -148,15 +153,15 @@ zeroModification = Modification 0 0 (-1)
 --   that is being simulated.
 type ModMap a = Map Modifier (Modification a)
 
-data Grav2tyState a g = Grav2tyState
-  { _tick        :: Tick               -- ^ The 'Tick' the game is at currently.
-  , _timePerTick :: a                  -- ^ The time between two 'Tick's.
-  , _inputs      :: ModMap a           -- ^ 'Modification's that have to be processed in the next tick.
-  , _graphics    :: g                  -- ^ Graphics state. Use @()@ if non-graphical.
-  , _world       :: World a            -- ^ All objects.
-  , _highestId   :: Id                 -- ^ Highest 'Id' used in 'World'. This is updated by 'addObject'
-                                       --   in Order to prevent accidental overwrites.
-  } deriving (Show, Eq)
+data Grav2tyState a s = Grav2tyState
+  { _tick        :: Tick                      -- ^ The 'Tick' the game is at currently.
+  , _timePerTick :: Int                       -- ^ The time between two 'Tick's in microseconds.
+  , _inputs      :: ModMap a                  -- ^ 'Modification's that have to be processed in the next tick.
+  , _customState :: s                         -- ^ Custom State, e. g. for graphics. Use @()@ if not used.
+  , _world       :: World a                   -- ^ All objects.
+  , _highestId   :: Id                        -- ^ Highest 'Id' used in 'World'. This is updated by 'addObject'
+                                              --   in Order to prevent accidental overwrites.
+  }
 
 makeLenses ''Grav2tyState
 

@@ -1,5 +1,5 @@
-{-# LANGUAGE BlockArguments #-}
-module Grav2ty.Control (processTick) where
+{-# LANGUAGE RecordWildCards #-}
+module Grav2ty.Control (tickUpdates, Grav2tyUpdate (..)) where
 
 import Grav2ty.Core
 import Grav2ty.Simulation
@@ -7,12 +7,19 @@ import Grav2ty.Util.RelGraph
 
 import Control.Lens
 import Control.Monad (when, unless)
+import Data.Bifunctor (first)
 import Data.Map (Map (..))
 import Data.Maybe
 import Linear.V2
 import Linear.Vector
 import qualified Data.Map.Strict as M
 
+data Grav2tyUpdate a
+  = DeleteObject Id              -- ^ Delete an object
+  | NewObject (Object a)         -- ^ Add an object
+  | UpdateObject Id (Object a)   -- ^ Change object with given id to new value
+--  | TickDone Tick                -- ^ Last update of a tick signifying it's fully computed
+  deriving (Show, Eq, Ord)
 
 projectile :: RealFloat a => (V2 a, V2 a) -> Integer -> Object a -> Object a
 projectile (pos,speed) tick ship =
@@ -23,73 +30,42 @@ projectile (pos,speed) tick ship =
 getForce :: (Ord a, Num a) =>  ObjRelGraph a -> Id -> V2 a
 getForce objRel id = foldlFrom' (\f r -> f + _relForce r) (V2 0 0) id objRel
 
-modifyObject :: (Monad m, RealFloat a)
-             => Id -> Object a -> Grav2ty a g m (Object a, World a)
-modifyObject id obj@Static {} = pure (obj, M.empty)
-modifyObject id obj@Dynamic {} = use tick >>= \currentTick ->
-  let mod = objectMod obj in use (inputs.at mod) >>= \modOfObj ->
-    if mod == NoMod || isNothing modOfObj
-       then pure (obj, M.empty)
-       else do
-         let Just (Modification rot acc fire) = modOfObj
-         -- inputs.at mod .= Nothing (not possible if inputs is
-         --                           used as state)
+deletionNecessary :: Tick -> ObjRelGraph a -> Id -> Object a -> Bool
+deletionNecessary tick rels id obj =
+  isDynamic obj &&                          -- only dynamic objs are deleted
+  (maybe False (< tick) (objectLife obj) || -- life span expired?
+  (anyFrom _relColl id rels == Just True))  -- collision?
 
-         -- TODO: lenses for Object
-         let newObj = obj { objectRot = rot, objectAcc = angle rot ^* acc }
-         if not (currentTick == fire && isJust (objectCannon obj))
-            then pure (newObj, M.empty)
-            else let p = projectile (fromJust (objectCannon obj)) currentTick newObj
-                  in addObject p >>= \id -> pure (newObj, M.singleton id p)
+applyModification :: RealFloat a => Grav2tyState a s -> Id -> Object a -> (Object a, [Grav2tyUpdate a])
+applyModification _ _ obj@(Static {}) = (obj, [])
+applyModification (Grav2tyState {..}) id obj
+  | not (doesModify (objectMod obj)) = (obj, [])
+  | otherwise =
+    case modObj of
+      Nothing -> (obj, [])
+      Just (newObj, fire) ->
+        ( newObj
+        , if _tick /= fire
+            then []
+            else case objectCannon newObj of
+                   Just c  -> [NewObject $ projectile c _tick newObj]
+                   Nothing -> [])
+  where modObj = do
+          (Modification rot acc fire) <- M.lookup (objectMod obj) _inputs
+          pure (obj { objectRot = rot, objectAcc = angle rot ^* acc }, fire)
 
-deletionNecessary :: Monad m
-                  => ObjRelGraph a -> Id -> Object a
-                  -> Grav2ty a g m Bool
-deletionNecessary rels id obj = do
-  currentTick <- use tick
-  pure $
-    isDynamic obj &&                                 -- only dynamic objs are deleted
-    (maybe False (< currentTick) (objectLife obj) || -- life span expired?
-    (anyFrom _relColl id rels == Just True))         -- collision?
+objectUpdates :: (Ord a, RealFloat a) => Grav2tyState a s -> ObjRelGraph a -> Id -> Object a -> [Grav2tyUpdate a]
+objectUpdates s@(Grav2tyState {..}) rels id obj =
+  case obj of
+    Static {}      -> []
+    d@(Dynamic {}) ->
+      let (modObject, newObjects) = applyModification s id obj
+          updatedObject = updateObject (fromIntegral _timePerTick / (10**6)) (getForce rels id) modObject
+       in if deletionNecessary _tick rels id obj
+            then [DeleteObject id]
+            else UpdateObject id updatedObject : newObjects
 
-processObject :: (Monad m, RealFloat a)
-              => World a -> ObjRelGraph a
-              -> (Object a -> Grav2ty a g m ())
-              -> Id -> Object a
-              -> Grav2ty a g m (World a)
-processObject old rels hook ident obj =
-  deletionNecessary rels ident obj >>= \del ->
-    if del
-       then delObject ident >> pure M.empty
-       else do
-         timeStep <- use timePerTick
-         (newObj, createdObjs) <- bimap (updateObject timeStep (getForce rels ident)) id <$>
-                                    modifyObject ident obj
-         setObject (Just ident) newObj
-         hook newObj
-         pure $ M.insert ident newObj createdObjs
-
--- | If called advances the simulation by one 'Tick' relying on the 'Grav2tyState'.
---
---   It also calls the provided hook-Action once for every remaining 'Object'. This
---   action can be used to update the '_graphics' state @g@ or modify the behaviour
---   of @processTick@ altogether.
---
---   It returns all 'Object's that were changed during the 'Tick' as a 'World'
---   which will only contain changed 'Dynamic' 'Object's.
-processTick :: (Monad m, RealFloat a)
-            => (Object a -> Grav2ty a g m ())
-            -> Grav2ty a g m (World a)
-processTick objHook = do
-  oldWorld <- use world
-  let objRel = objectRelGraph oldWorld
-
-  updatedObjs <- use world >>= M.foldlWithKey' (\action id obj ->
-    action >>= \updated -> fmap (M.union updated) (processObject oldWorld objRel objHook id obj)) (pure M.empty)
-
-  tick %= (+1)
-
-  pure updatedObjs
-
--- TODO Map could be replaced by Seq here because we don't need to
--- lookup a values in it.
+tickUpdates :: (Ord a, RealFloat a) => Grav2tyState a s -> [[Grav2tyUpdate a]]
+tickUpdates s@(Grav2tyState {..}) =
+  M.foldlWithKey' (\updates id obj -> objectUpdates s objRel id obj : updates) [] _world
+  where objRel = objectRelGraph _world
