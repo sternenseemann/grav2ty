@@ -1,5 +1,6 @@
-{ mkDerivation, aeson, base, bytestring, containers, flat, gloss
-, lens, linear, stdenv, tasty, tasty-quickcheck
+{ mkDerivation, attoparsec, base, bytestring, clock, containers
+, flat, gloss, lens, linear, network, stdenv, stm, tasty
+, tasty-quickcheck, time, transformers
 }:
 mkDerivation {
   pname = "grav2ty";
@@ -8,13 +9,15 @@ mkDerivation {
   isLibrary = false;
   isExecutable = true;
   libraryHaskellDepends = [
-    aeson base bytestring containers flat lens linear
+    attoparsec base bytestring clock containers flat lens linear
+    network stm transformers
   ];
-  executableHaskellDepends = [ base containers gloss lens linear ];
+  executableHaskellDepends = [
+    base clock containers gloss lens linear network stm time
+    transformers
+  ];
   testHaskellDepends = [ base tasty tasty-quickcheck ];
-  enableLibraryProfiling = true;
-  enableExecutableProfiling = true;
-  doHaddock = true;
+  doHaddock = false;
   description = "a 2d space (ship) game with realistic physics-based gameplay";
   license = stdenv.lib.licenses.gpl3;
 }
