@@ -1,10 +1,12 @@
 let pkgs = import <nixpkgs> {};
-    profiled = pkgs.haskellPackages.override {
+    hp = pkgs.haskellPackages.override {
       overrides = self: super: {
-        mkDerivation = args: super.mkDerivation (args // {
-          enableLibraryProfiling = true;
-        });
+        #mkDerivation = args: super.mkDerivation (args // {
+        #  enableLibraryProfiling = true;
+        #});
+
+        flat = pkgs.haskell.lib.markUnbroken super.flat;
       };
     };
-    drv = profiled.callPackage ./grav2ty.nix { };
+    drv = hp.callPackage ./grav2ty.nix { };
 in if pkgs.lib.inNixShell then drv.env else drv
