@@ -36,12 +36,13 @@ runTicked delay action = do
   tickQueue <- Ticked <$> newTBQueueIO 1
 
   tr <- async $ tickRunner tickQueue action
-  link tr
+  linkOnly (const True) tr
 
   tg <- async $ tickGenerator delay tickQueue 0
-  link tg
+  linkOnly (const True) tg
 
-  link2 tg tr
+  link2Only (const True) tg tr
 
   wait tg
   wait tr
+-- we use linkOnly (const True) to also stop if one of the threads gets cancelled
