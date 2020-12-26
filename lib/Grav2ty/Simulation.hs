@@ -8,6 +8,7 @@ module Grav2ty.Simulation
   -- * Hitboxes
   , translateHitbox
   , rotateHitbox
+  , scaleHitbox
   , collision
   , objectCollision
   -- * Object Relations
@@ -57,6 +58,9 @@ rotateHitbox angle box =
     HLine a b -> HLine (rotateV2 angle a) (rotateV2 angle b)
     HCircle c r -> HCircle (rotateV2 angle c) r
     HCombined l -> HCombined . map (rotateHitbox angle) $ l
+
+scaleHitbox :: Num a => a -> Hitbox a -> Hitbox a
+scaleHitbox s box = fmap (* s) box
 
 -- | Returns the 'Hitbox' for an 'Object' — rotated and translated
 --   to the location it is *actually* at.

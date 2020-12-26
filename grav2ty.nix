@@ -1,6 +1,6 @@
-{ mkDerivation, attoparsec, base, bytestring, clock, containers
-, flat, gloss, lens, linear, network, stdenv, stm, tasty
-, tasty-quickcheck, time, transformers
+{ mkDerivation, async, attoparsec, base, bytestring, clock
+, containers, flat, lens, linear, network, sdl2, sdl2-gfx, stdenv
+, stm, tasty, tasty-quickcheck, time, transformers
 }:
 mkDerivation {
   pname = "grav2ty";
@@ -9,12 +9,12 @@ mkDerivation {
   isLibrary = false;
   isExecutable = true;
   libraryHaskellDepends = [
-    attoparsec base bytestring clock containers flat lens linear
+    async attoparsec base bytestring clock containers flat lens linear
     network stm transformers
   ];
   executableHaskellDepends = [
-    base clock containers gloss lens linear network stm time
-    transformers
+    async base clock containers lens linear network sdl2 sdl2-gfx stm
+    time transformers
   ];
   testHaskellDepends = [ base tasty tasty-quickcheck ];
   doHaddock = false;

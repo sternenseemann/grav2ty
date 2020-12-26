@@ -42,17 +42,16 @@ library grav2ty-lib
   hs-source-dirs:      lib
   default-language:    Haskell2010
 
---executable grav2ty-client
---  main-is:             Main.hs
---  build-depends:       base >=4.12 && <5
---                     , containers ^>=0.6.0.1
---                     , gloss ^>=1.13
---                     , linear >=1.20 && < 1.22
---                     , lens >=4.17 && <4.20
---                     , transformers^>=0.5
---                     , grav2ty-lib
---  hs-source-dirs:      client
---  default-language:    Haskell2010
+executable grav2ty-client
+  main-is:             Main.hs
+  build-depends:       base >=4.12 && <5
+                     , containers ^>=0.6
+                     , grav2ty-lib
+                     , sdl2^>=2.5
+                     , sdl2-gfx^>=0.2
+                     , linear >=1.20 && <1.22
+  hs-source-dirs:      client
+  default-language:    Haskell2010
 
 executable grav2ty-server
   main-is:             Main.hs

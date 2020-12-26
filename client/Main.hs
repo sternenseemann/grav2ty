@@ -1,135 +1,100 @@
-{-# LANGUAGE TemplateHaskell  #-}
-{-# LANGUAGE Rank2Types       #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
 import Grav2ty.Core
-import Grav2ty.Simulation
-import Grav2ty.Control
+import Grav2ty.Simulation (translateHitbox, scaleHitbox, rotateHitbox)
 
-import Control.Lens
-import Control.Monad (when)
+import Control.Exception (bracket)
+import Control.Monad (unless, forM_)
+import qualified Data.Map as M
+import Data.Maybe (fromMaybe)
+import Foreign.C.Types (CInt (..))
 import Linear.V2
-import Control.Monad.Trans.State
-import Data.Fixed (mod')
-import Data.Foldable
-import Data.Maybe
-import Data.Tuple (uncurry)
-import qualified Data.Map.Strict as M
-import Data.Map.Lens
-import Text.Printf
+import qualified SDL as SDL
+import SDL (($=))
+import SDL.Primitive as GFX
 
-import Graphics.Gloss
-import Graphics.Gloss.Data.ViewPort
-import Graphics.Gloss.Interface.Pure.Game
+initialWorld :: Fractional a => Grav2tyState a ()
+initialWorld = flip (Grav2tyState 0 (10^6) mempty ()) 2 $ M.fromList
+  [ (0, Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod Nothing Nothing)
+  , (1, Static (centeredCircle 80) 0 8e14 (V2 0 0))
+  , (2, Dynamic shipHitbox 0 300 (V2 200 300) (V2 0 0) (V2 0 0) NoMod Nothing Nothing)
+  ]
 
-data GlossState
-  = GlossState
-  { _glossViewPort :: (Int, Int)
-  , _glossViewPortCenter :: (Float, Float)
-  , _glossViewPortScale :: Float
-  , _glossCenterView :: Bool
+data Viewport
+  = Viewport
+  { vpOffset :: V2 CInt
+  , vpScale  :: Double
   } deriving (Show, Eq, Ord)
 
-makeLenses ''GlossState
+calculateViewport :: SDL.Window -> V2 Double -> Double -> IO Viewport
+calculateViewport w (V2 x y) scale = do
+  (V2 xo yo) <- fmap (`div` 2) <$> SDL.get (SDL.windowSize w)
+  pure
+    $ Viewport
+    { vpOffset = V2 (xo + round x) (yo + round y)
+    , vpScale  = scale
+    }
 
-vectorToPoint :: V2 a -> (a, a)
-vectorToPoint (V2 x y) = (x, y)
+drawObject :: SDL.Renderer -> Viewport ->  Object Double -> IO ()
+drawObject r vp = drawHitbox r . viewportHitbox vp
 
-homBimap :: Bifunctor f => (a -> b) -> f a a -> f b b
-homBimap f = bimap f f
+viewportHitbox :: Viewport -> Object Double -> Hitbox CInt
+viewportHitbox vp obj =
+   fmap round
+ . translateHitbox (objectLoc obj + fmap fromIntegral (vpOffset vp))
+ . scaleHitbox (vpScale vp)
+ . rotateHitbox (objectRot obj)
+ $ objectHitbox obj
 
-renderHitbox :: Hitbox Float -> Picture
-renderHitbox box =  Color white $
-  case box of
-    HCircle (V2 x' y') r -> translate x' y' $ Circle r
-    HLine a b -> Line . map vectorToPoint $ [a, b]
-    HCombined boxes -> Pictures $ map renderHitbox boxes
+drawHitbox :: SDL.Renderer -> Hitbox CInt -> IO ()
+drawHitbox r (HCombined b) = forM_ b $ drawHitbox r
+drawHitbox r (HCircle pos radius) =
+  GFX.smoothCircle r pos radius (SDL.V4 255 255 255 255)
+drawHitbox r (HLine a b) =
+  GFX.smoothLine r a b (SDL.V4 255 255 255 255)
 
-renderObject :: Object Float -> Picture
-renderObject = renderHitbox . realHitbox
+draw :: SDL.Window -> SDL.Renderer -> Grav2tyState Double s -> IO ()
+draw w r state = do
+  viewport <- calculateViewport w (V2 0 0) 1
+  SDL.rendererDrawColor r $= SDL.V4 0 0 0 255
+  SDL.clear r
 
-renderUi :: (PrintfArg a, Num a) => Grav2tyState a GlossState -> Picture
-renderUi state = uncurry translate (homBimap ((+ 50) . (* (-1)) . (/ 2) . fromIntegral)
-  . (^. customState.glossViewPort) $ state)
-  . scale 0.2 0.2 . Color green . Text $ uiText
-  where uiText = printf "Acceleration: %.0f Time/Tick: %d Tick: %d" acc tpt t
-        acc = fromMaybe 0 $ state^?inputs.at localMod ._Just.modAcc
-        t = state^.tick
-        tpt = state^.timePerTick
+  forM_ (_world state) $ drawObject r viewport
 
-renderGame :: Grav2tyState Float GlossState -> Picture
-renderGame state = Pictures [ renderUi  state, applyViewPort objs ]
-  where objs = Pictures . foldl' (\l x -> renderObject x : l) [] $ state^.world
-        applyViewPort = if state^.customState.glossCenterView
-                           then applyViewPortToPicture viewport
-                           else id
-        viewport = ViewPort
-          (homBimap negate $ state^.customState.glossViewPortCenter)
-          0
-          (state^.customState.glossViewPortScale)
+  SDL.present r
 
-boundSub :: (Ord a, Num a) => a -> a -> a -> a
-boundSub min a x = if res < min then min else res
-  where res = x - a
+noModifier :: SDL.KeyModifier
+noModifier = SDL.KeyModifier False False False False False False False False False False False
 
-boundAdd :: (Ord a, Num a) => a -> a -> a -> a
-boundAdd max a x = if res > max then max else res
-  where res = x + a
+needExit :: SDL.Event -> Bool
+needExit ev =
+  case SDL.eventPayload ev of
+    SDL.QuitEvent -> True
+    SDL.KeyboardEvent d ->
+      let keysym = SDL.keyboardEventKeysym d
+       in SDL.keysymModifier keysym == noModifier &&
+          SDL.keysymKeycode keysym == SDL.KeycodeEscape
+    _ -> False
 
-eventHandler :: (Show a, Ord a, Real a, Floating a) => Event
-             -> Grav2tyState a GlossState -> Grav2tyState a GlossState
-eventHandler (EventKey key Down _ _) state = action state
-  where updateLocalMod :: Lens' (Modification a) b -> (b -> b)
-                       -> Grav2tyState a GlossState -> Grav2tyState a GlossState
-        updateLocalMod l = over (inputs.at localMod ._Just.l)
-        accStep = 1
-        rotStep = pi / 10
-        scaleStep = 1.1
-        timeStep = 1.0
-        mod2pi = flip mod' (2 * pi)
-        action =
-          case key of
-            SpecialKey KeyUp -> updateLocalMod modAcc (+ accStep)
-            SpecialKey KeyDown -> updateLocalMod modAcc (boundSub 0 accStep)
-            SpecialKey KeyLeft -> updateLocalMod modRot (mod2pi . (+ rotStep))
-            SpecialKey KeyRight -> updateLocalMod modRot (mod2pi . subtract rotStep)
-            SpecialKey KeySpace -> updateLocalMod modFire (const $ state^.tick + 10)
-            Char 'c' -> over (customState.glossCenterView) not
-            Char '+' -> over (customState.glossViewPortScale) (* scaleStep)
-            Char '-' -> over (customState.glossViewPortScale) (/ scaleStep)
-            _ -> id
-eventHandler (EventResize vp) state = set (customState.glossViewPort) vp state
-eventHandler _ s = s
+appLoop :: SDL.Window -> SDL.Renderer -> IO ()
+appLoop w r = do
+  draw w r initialWorld
+  ev <- SDL.pollEvent
+  let exit = fromMaybe False $ fmap needExit ev
 
-updateWorld :: Float -> Grav2tyState Float GlossState -> Grav2tyState Float GlossState
-updateWorld ts state = snd . flip runState state $ timePerTick .= round (ts * (10 ** 6)) >> processTick hook
-  where hook obj@Dynamic { } = when (objectMod obj == localMod) $
-          customState.glossViewPortCenter .= (vectorToPoint . objectLoc $ obj)
-        hook _ = pure ()
+  unless exit $ appLoop w r
 
-localMod :: Modifier
-localMod = Mod 0
-
-initialWorld :: Fractional a => Grav2tyState a GlossState
-initialWorld = snd . flip runState (Grav2tyState 0 (round $ 1/500 * (10 ** 6))
-  (M.fromList [(localMod, zeroModification)])
-  (GlossState (800, 800) (0, 0) 1 True)
-  mempty 0) $ do
-    addObject $ Dynamic shipHitbox 0 10000 (V2 200 0) (V2 0 0) (V2 0 0) localMod (Just (V2 15 0, V2 1 0)) Nothing
-    addObject $ Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod Nothing Nothing
-    addObject $ Static (centeredCircle 80) 0 moonMass (V2 0 0)
---  addObject $ Static (centeredCircle 40) 0 (0.5 * moonMass) (V2 250 250)
-  where moonMass = 8e14
-
-fps = 500
+windowSettings :: SDL.WindowConfig
+windowSettings = SDL.defaultWindow
+  { SDL.windowInitialSize = V2 1024 768
+  , SDL.windowResizable = True
+  }
 
 main :: IO ()
-main = play
-  (InWindow "grav2ty" (initialWorld^.customState.glossViewPort) (0,0))
-  black
-  fps
-  initialWorld
-  renderGame
-  eventHandler
-  updateWorld
+main = do
+  SDL.initializeAll
+  bracket (SDL.createWindow "grav2ty" windowSettings) SDL.destroyWindow
+    $ \window -> do
+      renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
+      appLoop window renderer

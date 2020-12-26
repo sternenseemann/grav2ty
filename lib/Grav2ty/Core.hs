@@ -121,6 +121,11 @@ data Hitbox a
   , circleRadius :: a
   } deriving (Eq, Show, Ord)
 
+instance Functor Hitbox where
+  fmap f (HLine a b)   = HLine (fmap f a) $ fmap f b
+  fmap f (HCircle c r) = HCircle (fmap f c) $ f r
+  fmap f (HCombined b) = HCombined $ map (fmap f) b
+
 -- | Example 'Hitbox' for a triangular, asteroids-like spaceship
 shipHitbox :: Num a => Hitbox a
 shipHitbox = HCombined
