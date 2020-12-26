@@ -12,15 +12,16 @@ module Grav2ty.Protocol
   , ErrorType (..)
   , renderMessage
   , messageParser
-  , Flat (..)
-  -- * Protocol Logic
-  , serverUpdateState
-  , clientUpdateState
+    -- * Mappings between 'Message's and 'Grav2tyUpdate's
+  , messageUpdateClient
+  , messageUpdateServer
+  , updateMessageServer
   ) where
 
 import Prelude hiding (take)
 
 import Grav2ty.Core
+import qualified Grav2ty.Control as GC (Grav2tyUpdate (..))
 import Grav2ty.Util.Serialization
 
 import Control.Lens ((%=), (.=), use)
@@ -64,8 +65,10 @@ data Message a
   | AssignMods [Modifier]
   | NewWorld Tick (World a)
   | NewObject Tick Id (Object a)
-  | UpdateMod (ModMap a)
+  | UpdateMod Tick Modifier (Modification a)
   | TimePerTick Int
+  | DeleteObject Tick Id
+-- TODO readd RequestMods Int for spectator support plus multiple users connections
   deriving (Show, Eq, Ord, Generic, Flat)
 
 toMaybe :: Bool -> a -> Maybe a
@@ -82,19 +85,27 @@ instance Flat a => ToPacket (Message a) where
   toPacket (AssignMods ids) = Packet 2 . flat . map (\(Mod i) -> i) . filter doesModify $ ids
   toPacket (NewWorld tick world) = Packet 3 $ flat (tick, world)
   toPacket (NewObject tick id obj) = Packet 4 $ flat (tick, id, obj)
-  toPacket (UpdateMod modmap) = Packet 5 (flat modmap)
+  toPacket (UpdateMod t m mf) = Packet 5 (flat (t, m, mf))
   toPacket (TimePerTick t) = Packet 6 (flat t)
+  toPacket (DeleteObject t i) = Packet 7 $ flat (t, i)
+
   fromPacket (Packet 0 v) = toMaybe (BS.length v == 1) (ProtocolVersion $ BS.head v)
   fromPacket (Packet 1 e) = Error <$> rightToMaybe (unflat e)
   fromPacket (Packet 2 m) = AssignMods . map Mod <$> rightToMaybe (unflat m)
-  fromPacket (Packet 3 w) = case unflat w of
-                              Left _ -> Nothing
-                              Right (tick, world) -> Just $ NewWorld tick world
-  fromPacket (Packet 4 o) = case unflat o of
-                              Left _ -> Nothing
-                              Right (tick, id, obj) -> Just $ NewObject tick id obj
-  fromPacket (Packet 5 m) = UpdateMod <$> rightToMaybe (unflat m)
+  fromPacket (Packet 3 w) =
+    case unflat w of
+      Left _ -> Nothing
+      Right (tick, world) -> Just $ NewWorld tick world
+  fromPacket (Packet 4 o) =
+    case unflat o of
+      Left _ -> Nothing
+      Right (tick, id, obj) -> Just $ NewObject tick id obj
+  fromPacket (Packet 5 m) =
+    case unflat m of
+      Left _ -> Nothing
+      Right (t, m, mf) -> Just $ UpdateMod t m mf
   fromPacket (Packet 6 t) = TimePerTick <$> rightToMaybe (unflat t)
+  fromPacket (Packet 7 m) = uncurry DeleteObject <$> rightToMaybe (unflat m)
   fromPacket (Packet _ _) = Nothing
 
 bytes :: Int64 -> [Word8]
@@ -129,28 +140,35 @@ messageParser :: Flat a => Parser (Message a)
 messageParser = packetParser >>=
   maybe (fail "Packet is no valid message") pure . fromPacket
 
--- | Process messages from a client connected via an already established connection.
---   Updates the State and ensures that the client won't set anything it shouldn't
---   be allowed to (like 'Modifier's it isn't assigned)
-serverUpdateState :: Monad m => [Modifier] -> Message p -> Grav2ty p g m ()
-serverUpdateState _ (ProtocolVersion _) = pure () -- protocol version does not change
-serverUpdateState _ (AssignMods _) = pure ()      -- can only be done by the server
-serverUpdateState _ (NewWorld _ _) = pure ()      -- can only be sent by the server
-serverUpdateState _ (NewObject _ _ _) = pure ()   -- can only be sent by the server
-serverUpdateState _ (TimePerTick _) = pure ()     -- only updated by the server
-serverUpdateState _ (Error _) = pure ()           -- TODO Error Handling, Client Errors
-serverUpdateState mods (UpdateMod modmap) = inputs %= insertMods (`elem` mods) modmap
+clientTickUpdate :: Tick -> Tick -> [GC.Grav2tyUpdate a]
+clientTickUpdate current tick =
+  if tick > current
+    then [GC.SetTick tick]
+    else []
 
-clientUpdateState :: Monad m => [Modifier] -> Message p -> Grav2ty p g m ()
-clientUpdateState _ (ProtocolVersion _) = pure () -- protocol version does not change
-clientUpdateState _ (Error _) = pure ()           -- TODO error handling here?
-clientUpdateState _ (TimePerTick t) = timePerTick .= t
-clientUpdateState mods (UpdateMod modmap) = inputs %= insertMods (not . (`elem` mods)) modmap
-clientUpdateState _ (NewWorld t w) = tick .= t >> world .= w
-clientUpdateState _ (NewObject t i o) = tick .= t >> (() <$ setObject (Just i) o)
+messageUpdateClient :: Tick -> Message a -> [GC.Grav2tyUpdate a]
+messageUpdateClient _ (NewWorld t w) = [GC.SetTick t, GC.SetWorld w]
+messageUpdateClient current (NewObject t i o) =
+ if t < current
+   then []
+   else GC.UpdateObject t o : clientTickUpdate current t
+messageUpdateClient current (UpdateMod t m mf) =
+  if t < current
+    then []
+    else GC.UpdateMod m mf : clientTickUpdate current t
+messageUpdateClient _ (TimePerTick tm) = [GC.SetTimePerTick tm]
+messageUpdateClient _ _ = []
 
-insertMods :: (Modifier -> Bool) -> ModMap a -> ModMap a -> ModMap a
-insertMods test from into = M.foldlWithKey' (\into mod content ->
-  if test mod
-     then M.insert mod content into
-     else into) into from
+messageUpdateServer :: [Modifier] -> Message a -> [GC.Grav2tyUpdate a]
+-- TODO factor in tick
+messageUpdateServer allowed (UpdateMod _ m mf) =
+  if m `elem` allowed then [GC.UpdateMod m mf] else []
+messageUpdateServer _ _ = []
+
+updateMessageServer :: Tick -> GC.Grav2tyUpdate a -> Maybe (Message a)
+updateMessageServer current (GC.DeleteObject i) = Just $ DeleteObject current i
+updateMessageServer current (GC.UpdateObject i o) = Just $ NewObject current i o
+updateMessageServer current (GC.UpdateMod m mf) = Just $ UpdateMod current m mf
+updateMessageServer current (GC.SetWorld w) = Just $ NewWorld current w
+updateMessageServer current (GC.SetTimePerTick tm) = Just $ TimePerTick tm
+updateMessageServer current _ = Nothing

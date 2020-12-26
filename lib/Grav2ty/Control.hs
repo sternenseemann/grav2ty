@@ -15,10 +15,15 @@ import Linear.Vector
 import qualified Data.Map.Strict as M
 
 data Grav2tyUpdate a
-  = DeleteObject Id              -- ^ Delete an object
-  | NewObject (Object a)         -- ^ Add an object
-  | UpdateObject Id (Object a)   -- ^ Change object with given id to new value
---  | TickDone Tick                -- ^ Last update of a tick signifying it's fully computed
+  -- emitted by tickUpdates and communication
+  = DeleteObject Id                     -- ^ Delete an object
+  | NewObject (Object a)                -- ^ Add an object
+  | UpdateObject Id (Object a)          -- ^ add or change object with given id
+  -- emitted by protocol communication only
+  | UpdateMod Modifier (Modification a) -- ^ set or add given 'Modifier'
+  | SetWorld (World a)
+  | SetTick Tick
+  | SetTimePerTick Int               -- ^ new tick length in microseconds
   deriving (Show, Eq, Ord)
 
 projectile :: RealFloat a => (V2 a, V2 a) -> Integer -> Object a -> Object a
