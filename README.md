@@ -19,22 +19,27 @@ the most realistic asteroids-like game in existence.
 - [x] collision detection
 - [ ] make measurements more realistic
 - [x] allow for zooming the viewport
-- [ ] Free viewport (mouse moved)
-- [x] time scaling / fast forward
-- [x] rework HUD, log additional info to console
-  - [ ] Add speed to HUD
-- [x] projectiles
-  - [ ] Limit firerate
-  - [x] make projectiles self-destruct
-  - [ ] reduce redundancy in projectile (cannon + object)
+- [x] ~~time scaling / fast forward~~
 - [ ] performance improvements
   - [ ] simplify RelGraph (ordered tuples as keys)
   - [ ] don't calculate gravity to every little object
   - [ ] don't do collision detection at a safe distance
-- [ ] multi player support
-- [ ] Prevent library user from creating a broken state (by hiding lenses etc. if possible)
-- [ ] cosmetics (improved models, stars, …)
-- [ ] switch rendering engine
+- [x] multi player support
+  - [ ] Spawn ships for players
+  - [ ] Implement client
+  - [ ] Simulate in client
+- [x] switch rendering engine
+  - [ ] cosmetics (improved models, stars, …)
+  - [ ] Introduce a good HUD
+  - [ ] main menu, pause menu
+  - [ ] Free viewport (mouse moved)
+- [ ] gameplay
+  - [ ] limit acceleration, fuel?
+  - [x] projectiles
+    - [ ] Limit firerate
+    - [x] make projectiles self-destruct
+    - [ ] reduce redundancy in projectile (cannon + object)
+  - [ ] mapping support
 - [ ] orbit visualization / prediction
 
 ## history
