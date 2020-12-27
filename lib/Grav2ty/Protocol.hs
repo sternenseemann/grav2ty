@@ -151,7 +151,7 @@ messageUpdateClient _ (NewWorld t w) = [GC.SetTick t, GC.SetWorld w]
 messageUpdateClient current (NewObject t i o) =
  if t < current
    then []
-   else GC.UpdateObject t o : clientTickUpdate current t
+   else GC.UpdateObject i o : clientTickUpdate current t
 messageUpdateClient current (UpdateMod t m mf) =
   if t < current
     then []
