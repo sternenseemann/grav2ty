@@ -29,6 +29,8 @@ the most realistic asteroids-like game in existence.
   - [ ] Implement client
   - [ ] Simulate in client
 - [x] switch rendering engine
+  - [ ] only redraw if necessary
+  - [ ] trajectory smoothing?
   - [ ] cosmetics (improved models, stars, …)
   - [ ] Introduce a good HUD
   - [ ] main menu, pause menu

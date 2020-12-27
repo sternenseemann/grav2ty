@@ -2,17 +2,32 @@
 module Main where
 
 import Grav2ty.Core
+import Grav2ty.Control (Grav2tyUpdate (..))
 import Grav2ty.Simulation (translateHitbox, scaleHitbox, rotateHitbox)
+import Grav2ty.Protocol (messagesParser, renderMessage, protocolVersion
+                        , Message (ProtocolVersion), messageUpdateClient)
 
+import Control.Concurrent.Async
+import Control.Concurrent.STM
+import Control.Concurrent.STM.TVar
 import Control.Exception (bracket)
-import Control.Monad (unless, forM_)
+import Control.Lens (set, (.~), (&), (%~))
+import Control.Monad (unless, forM_, forever)
+import Data.Attoparsec.ByteString (parseOnly)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import Foreign.C.Types (CInt (..))
 import Linear.V2
+import Network.Socket
+import Network.Socket.ByteString (recv, sendAll)
 import qualified SDL as SDL
 import SDL (($=))
 import SDL.Primitive as GFX
+import System.Environment
+import System.Exit
+
+emptyState :: Grav2tyState a ()
+emptyState = Grav2tyState 0 (5*10^3) mempty () mempty 0
 
 initialWorld :: Fractional a => Grav2tyState a ()
 initialWorld = flip (Grav2tyState 0 (10^6) mempty ()) 2 $ M.fromList
@@ -77,13 +92,14 @@ needExit ev =
           SDL.keysymKeycode keysym == SDL.KeycodeEscape
     _ -> False
 
-appLoop :: SDL.Window -> SDL.Renderer -> IO ()
-appLoop w r = do
-  draw w r initialWorld
+appLoop :: TVar (Grav2tyState Double ()) -> SDL.Window -> SDL.Renderer -> IO ()
+appLoop state w r = do
+  s <- readTVarIO state
+  draw w r s
   ev <- SDL.pollEvent
   let exit = fromMaybe False $ fmap needExit ev
 
-  unless exit $ appLoop w r
+  unless exit $ appLoop state w r
 
 windowSettings :: SDL.WindowConfig
 windowSettings = SDL.defaultWindow
@@ -91,10 +107,57 @@ windowSettings = SDL.defaultWindow
   , SDL.windowResizable = True
   }
 
-main :: IO ()
-main = do
+netThread :: Socket -> TVar (Grav2tyState Double ()) -> IO ()
+netThread sock state = do
+  sendAll sock . renderMessage $ (ProtocolVersion protocolVersion :: Message Double)
+
+  forever $ do
+    bytes <- recv sock (1024^2 * 100)
+
+    case parseOnly messagesParser bytes of
+      Left e -> putStrLn $ "Parse error: " ++ e
+      Right m -> do
+        current <- _tick <$> readTVarIO state
+        forM_ (concatMap (messageUpdateClient current) m) $ \update -> do
+          print update
+          atomically . modifyTVar state $ \s ->
+            case update of
+              DeleteObject i -> s & world %~ M.delete i
+              UpdateObject i o -> s & world %~ M.insert i o
+              SetWorld w -> set world w s
+              SetTick t -> set tick t s
+              SetTimePerTick tm -> set timePerTick tm s
+              -- TODO UpdateMod, NewObject
+              _ -> s
+
+run :: String -> String -> IO ()
+run host port = do
+  state <- newTVarIO emptyState
+
+  let hints = defaultHints { addrFlags = [AI_NUMERICSERV], addrSocketType = Datagram }
+  addr:_ <- getAddrInfo (Just hints) (Just host) (Just port)
+  sock <- socket (addrFamily addr) (addrSocketType addr) (addrProtocol addr)
+  connect sock $ addrAddress addr
+
+  putStrLn $ "Using " ++ show (addrAddress addr)
+
+  net <- async $ netThread sock state
+
   SDL.initializeAll
   bracket (SDL.createWindow "grav2ty" windowSettings) SDL.destroyWindow
     $ \window -> do
       renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
-      appLoop window renderer
+      appLoop state window renderer
+
+  cancel net
+  close sock
+
+main :: IO ()
+main = do
+  args <- getArgs
+  name <- getProgName
+  case args of
+    [host, port] -> run host port
+    _ -> do
+      putStrLn $ "Usage: " ++ name ++ " HOST PORT"
+      exitFailure

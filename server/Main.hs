@@ -41,7 +41,7 @@ instance Hashable SockAddr where
 
 
 initialState :: Grav2tyState Double ()
-initialState = Grav2tyState 0 (10^6) mempty ()
+initialState = Grav2tyState 0 (10^4) mempty ()
   (M.fromList
     [ (0, Dynamic (centeredCircle 10) 0 5000 (V2 0 200) (V2 15 0) (V2 0 0) NoMod Nothing Nothing)
     , (1, Static (centeredCircle 80) 0 8e14 (V2 0 0)) ])
