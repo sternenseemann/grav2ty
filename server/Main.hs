@@ -140,27 +140,29 @@ netIn :: Socket
 netIn s clients netChan tickChan = forever $ do
   (bytes, addr) <- recvFrom s maxPacketLen
 
-  case parseOnly GP.messageParser bytes of
+  case parseOnly GP.messagesParser bytes of
     Left err -> do
       putStrLn $ "Could not parse message from " ++ show addr ++ ": " ++ err
       atomically . writeTChan netChan
         $ NetThreadSendTo addr [GP.Error GP.ErrorNoParse]
-    Right (GP.ProtocolVersion v) ->
-      if v == GP.protocolVersion
-        then let modifier = modifierForAddr addr
-              in atomically $ do
-                modifyTVar clients $ M.insert addr modifier
-                writeTChan tickChan $ TickThreadSendWorld addr
-                writeTChan netChan
-                  $ NetThreadSendTo addr [GP.AssignMods [modifier]]
-        else do
-          putStrLn $ "Incompatible protocol version from " ++ show addr
-          atomically . writeTChan netChan
-            $ NetThreadSendTo addr [GP.Error GP.ErrorVersionMismatch]
-    Right x -> do
-      clientMod <- maybeToList . M.lookup addr <$> readTVarIO clients
-      atomically . writeTChan tickChan . TickThreadUpdates
-        $ GP.messageUpdateServer clientMod x
+    Right msgs -> forM_ msgs $ \msg ->
+      case msg of
+        GP.ProtocolVersion v ->
+          if v == GP.protocolVersion
+            then let modifier = modifierForAddr addr
+                  in atomically $ do
+                    modifyTVar clients $ M.insert addr modifier
+                    writeTChan tickChan $ TickThreadSendWorld addr
+                    writeTChan netChan
+                      $ NetThreadSendTo addr [GP.AssignMods [modifier]]
+            else do
+              putStrLn $ "Incompatible protocol version from " ++ show addr
+              atomically . writeTChan netChan
+                $ NetThreadSendTo addr [GP.Error GP.ErrorVersionMismatch]
+        x -> do
+          clientMod <- maybeToList . M.lookup addr <$> readTVarIO clients
+          atomically . writeTChan tickChan . TickThreadUpdates
+            $ GP.messageUpdateServer clientMod x
 
 getGrav2tyAddr :: IO AddrInfo
 getGrav2tyAddr = head <$> getAddrInfo hints (Just "::") (Just "2001")

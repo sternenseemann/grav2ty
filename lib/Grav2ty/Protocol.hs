@@ -12,6 +12,7 @@ module Grav2ty.Protocol
   , ErrorType (..)
   , renderMessage
   , messageParser
+  , messagesParser
     -- * Mappings between 'Message's and 'Grav2tyUpdate's
   , messageUpdateClient
   , messageUpdateServer
@@ -139,6 +140,9 @@ renderMessage = renderPacket . toPacket
 messageParser :: Flat a => Parser (Message a)
 messageParser = packetParser >>=
   maybe (fail "Packet is no valid message") pure . fromPacket
+
+messagesParser :: Flat a => Parser [Message a]
+messagesParser = many1 messageParser
 
 clientTickUpdate :: Tick -> Tick -> [GC.Grav2tyUpdate a]
 clientTickUpdate current tick =

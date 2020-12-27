@@ -1,6 +1,6 @@
 module Main where
 
-import Control.Monad (forever)
+import Control.Monad (forever, forM_)
 import Data.Attoparsec.ByteString (parseOnly)
 import Network.Socket
 import Network.Socket.ByteString
@@ -26,9 +26,9 @@ grav2tyConnect host port = do
   forever $ do
     bytes <- recv sock (1024^2 * 100)
 
-    case parseOnly messageParser bytes of
+    case parseOnly messagesParser bytes of
       Left e -> putStrLn $ "Parse error: " ++ e
-      Right m -> print (m :: Message Double)
+      Right ms -> forM_ ms $ \m -> print (m :: Message Double)
 
 main :: IO ()
 main = do
