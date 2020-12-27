@@ -99,9 +99,10 @@ processUpdates svar tickChan netChan = forever $ do
     TickThreadSendWorld addr -> do
       world <- use world
       tick <- use tick
+      time <- use timePerTick
 
       liftIO . atomically . writeTChan netChan
-        $ NetThreadSendTo addr [GP.NewWorld tick world]
+        $ NetThreadSendTo addr [GP.TimePerTick time, GP.NewWorld tick world]
     TickThreadDone t timespec -> do
       tick %= (+ 1)
       state <- get
