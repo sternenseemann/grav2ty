@@ -26,6 +26,7 @@ the most realistic asteroids-like game in existence.
   - [ ] don't do collision detection at a safe distance
 - [x] multi player support
   - [ ] Spawn ships for players
+  - [ ] Support players disconnecting, timing out
   - [ ] Implement client
   - [ ] Simulate in client
 - [x] switch rendering engine
